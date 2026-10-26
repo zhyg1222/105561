@@ -1,0 +1,24 @@
+{
+  "profile_name": "oppo-a97-primary",
+  "device": {
+    "brand": "OPPO",
+    "model": "A97",
+    "recommended_ram": "8GB or 12GB",
+    "role": "dedicated Xiaojuju phone"
+  },
+  "runtime": {
+    "phone_control": {
+      "mode": "usb_only",
+      "wireless_enabled": false,
+      "usb_serial": "",
+      "wireless_serial": ""
+    },
+    "wechat": {
+      "package": "com.tencent.mm",
+      "activity": "com.tencent.mm/.ui.LauncherUI",
+      "android_user": "0",
+      "variant": "primary",
+      "chat_title": "大哥"
+    }
+  }
+}
