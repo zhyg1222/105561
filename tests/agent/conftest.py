@@ -11,8 +11,9 @@ import pytest_asyncio
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pgserver.postgres_server import PostgresServer
 
+from xiaojuju_agent.api import create_app
 from xiaojuju_agent.db import Database
-from xiaojuju_agent.events import EventStore
+from xiaojuju_agent.events import EventStore, SubmitResult
 from xiaojuju_agent.settings import Settings
 
 if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
@@ -75,3 +76,35 @@ async def postgres_saver(pg_container):
         yield saver
     finally:
         await manager.__aexit__(None, None, None)
+
+
+class FakeGraph:
+    async def ainvoke(self, state, config):
+        return {"reply": "\u6536\u5230\uff1a" + state["user_text"], "messages": []}
+
+
+class FakeEventService:
+    async def submit(self, event, dispatch):
+        return SubmitResult(True, "received", event.shadow)
+
+
+class FailingEventService:
+    async def submit(self, event, dispatch):
+        raise ConnectionError("postgres down")
+
+
+@pytest.fixture
+def app():
+    return create_app(
+        FakeEventService(), FakeGraph(), dispatch=lambda event_id: None, policy_client=None
+    )
+
+
+@pytest.fixture
+def failing_app():
+    return create_app(
+        FailingEventService(),
+        FakeGraph(),
+        dispatch=lambda event_id: None,
+        policy_client=None,
+    )
