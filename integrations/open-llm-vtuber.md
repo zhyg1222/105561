@@ -40,5 +40,11 @@ http://127.0.0.1:12393
 
 - Python 3.10 独立环境由 uv 创建在子模块目录。
 - 当前电脑为 8GB 内存、无独立显卡，适合做 720p 本地预览，不适合 24 小时高质量直播。
-- 默认 SherpaONNX SenseVoice ASR 模型首次启动约 1GB，会在本机下载。
+- 默认 SenseVoice 模型约 1GB，在 Windows 上下载失败；已改用 ModelScope 的 `Systran/faster-whisper-base`（约 138MB），保存在 D 盘模型目录。
 - 正式直播前应评估专用主机或云端运行。
+## D 盘缓存
+
+- D:\yige-personal-kb\.runtime\uv-cache：uv 包缓存
+- D:\yige-personal-kb\.runtime\huggingface：Hugging Face 缓存
+- D:\yige-personal-kb\.runtime\torch：Torch 缓存
+- endor/open-llm-vtuber/models/faster-whisper-base：本地 ASR 模型
