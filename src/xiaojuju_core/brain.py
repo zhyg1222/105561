@@ -8,6 +8,7 @@ from .state import update_life_state
 
 PATHS = Paths.production()
 LIVE_PROMPT = Path(r"D:\yige-personal-kb\xiaojuju\prompts\live_persona.md")
+CONSTITUTION = PATHS.persona / "人格宪法.md"
 ANYSEARCH = Path(r"C:\Users\Administrator\.codex\skills\anysearch\scripts\anysearch_cli.js")
 NODE = Path(r"D:\Program Files\nodejs\node.exe")
 _CACHE = {}
@@ -22,14 +23,14 @@ def _memory_path(event, override=None):
     key = hashlib.sha1(f"{event.get('source')}:{event.get('user_id')}".encode()).hexdigest()[:16]
     return PATHS.persona / "记忆" / "访客" / f"{key}.jsonl"
 
-def _default_model(system: str, user: str) -> str:
+def _default_model(system: str, user: str, max_tokens: int = 220) -> str:
     key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if not key:
         raise RuntimeError("DEEPSEEK_API_KEY is missing")
     payload = {
         "model": "deepseek-chat",
         "temperature": 0.8,
-        "max_tokens": 220,
+        "max_tokens": max_tokens,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -73,11 +74,14 @@ def _clean_reply(text: str) -> str:
     return text[:180]
 
 def _system_prompt(state: dict, memories: list[dict]) -> str:
+    constitution = CONSTITUTION.read_text(encoding="utf-8")
     live = LIVE_PROMPT.read_text(encoding="utf-8")
     memory_text = "\n".join(
         f"- {r.get('user', '')} / {r.get('assistant', '')}" for r in memories[-4:]
     ) or "（暂无相关长期记忆）"
-    return f'''{live}
+    return f'''{constitution}
+
+{live}
 
 你现在在内部做一次反应判断，但最终只输出 JSON：
 {{"should_respond":true,"move":"接话/调侃/安慰/提醒/换话题","emotion":"当前情绪","intent":"一句话说明你想做什么","needs_web":false,"search_query":"","reply":"要说出口的原话"}}

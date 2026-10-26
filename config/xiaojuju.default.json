@@ -27,7 +27,10 @@
     }
   },
   "autonomy": {
-    "quiet_hours": ["00:00", "07:30"],
+    "quiet_hours": [
+      "00:00",
+      "07:30"
+    ],
     "activity_limit_per_day": 4,
     "activity_gap_minutes": 120,
     "curiosity_file": "自主生活/兴趣/关注队列.json",
@@ -56,7 +59,10 @@
     "download": "ask",
     "upload": "ask",
     "persist_history": true,
-    "allowed_schemes": ["https", "http"]
+    "allowed_schemes": [
+      "https",
+      "http"
+    ]
   },
   "memory": {
     "main_contact": "大哥",
@@ -77,7 +83,13 @@
     "ai_label_required": true,
     "auto_publish_own_accounts": false,
     "require_human_review_for_sensitive": true,
-    "sensitive_categories": ["health", "money", "politics", "private_data", "minors"],
+    "sensitive_categories": [
+      "health",
+      "money",
+      "politics",
+      "private_data",
+      "minors"
+    ],
     "daily_post_limit": 3
   },
   "presence": {
@@ -91,5 +103,67 @@
     "open_llm_url": "http://127.0.0.1:12393",
     "timezone": "Asia/Shanghai",
     "data_root": "D:\\yige-personal-kb\\12_社交代理\\小居居"
+  },
+  "goals": {
+    "money_research_enabled": true,
+    "money_research_priority": "high",
+    "daily_brief": {
+      "enabled": false,
+      "time": "20:30",
+      "channel": "wechat",
+      "contact": "大哥",
+      "max_items": 3,
+      "mode": "internal_knowledge_only",
+      "formal_report": false
+    },
+    "focus_areas": [
+      "AI自动化服务与企业私有化部署",
+      "视力防控门店的合规引流与运营效率",
+      "短视频、直播与内容变现",
+      "小型软件、工具和产品化服务",
+      "本地商户的AI工具需求和付费意愿"
+    ],
+    "report_format": [
+      "今日最值得关注的机会",
+      "为什么现在有机会（证据与来源）",
+      "最小验证动作和成本",
+      "风险与不确定性"
+    ],
+    "forbidden_actions": [
+      "autonomous_trading",
+      "autonomous_spending",
+      "illegal_or_fraudulent_schemes",
+      "spam_or_platform_manipulation"
+    ],
+    "knowledge_sharing": {
+      "enabled": true,
+      "mode": "occasional_natural_conversation",
+      "force_on_schedule": false,
+      "channel": "wechat"
+    }
+  },
+  "constitution": {
+    "immutable": true,
+    "file": "人格宪法.md",
+    "priority": [
+      "ai_identity",
+      "safety_law",
+      "autonomy_self",
+      "relationship_style",
+      "habits_tasks"
+    ]
+  },
+  "character": {
+    "file": "人格核心.md",
+    "speech_examples": "prompts/live_persona.md",
+    "change_requires_owner": true
+  },
+  "habits": {
+    "research_topics_file": "自主生活/兴趣/关注队列.json",
+    "casual_chat_allowed": true,
+    "force_daily_report": false,
+    "money_topic_proactivity": "when_relevant",
+    "share_knowledge_style": "brief_natural",
+    "self_initiated_contact": "whitelist_only"
   }
 }

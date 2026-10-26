@@ -49,6 +49,32 @@ def validate_config(config: dict) -> dict:
         raise ValueError("publishing.ai_label_required must be true")
     if publishing.get("require_human_review_for_sensitive") is not True:
         raise ValueError("sensitive publishing must require human review")
+    constitution = config.get("constitution", {})
+    if constitution.get("immutable") is not True or not str(constitution.get("file", "")).strip():
+        raise ValueError("immutable personality constitution is required")
+    character = config.get("character", {})
+    if not str(character.get("file", "")).strip():
+        raise ValueError("character file is required")
+    habits = config.get("habits", {})
+    if habits.get("force_daily_report") is not False:
+        raise ValueError("habits must not force daily reports")
+    if habits.get("casual_chat_allowed") is not True:
+        raise ValueError("casual chat must be allowed")
+    goals = config.get("goals", {})
+    if goals.get("money_research_enabled"):
+        brief = goals.get("daily_brief", {})
+        if brief.get("enabled"):
+            if brief.get("channel") != "wechat":
+                raise ValueError("daily brief channel must be wechat")
+            if not _valid_time(brief.get("time", "")):
+                raise ValueError("daily brief time must be HH:MM")
+            if not str(brief.get("contact", "")).strip():
+                raise ValueError("daily brief contact is required")
+            if not 1 <= int(brief.get("max_items", 3)) <= 5:
+                raise ValueError("daily brief max_items must be 1..5")
+        forbidden = set(goals.get("forbidden_actions", []))
+        if "autonomous_trading" not in forbidden or "autonomous_spending" not in forbidden:
+            raise ValueError("money research must forbid autonomous trading and spending")
     return config
 
 def load_config(default_path: Path | None = None, private_path: Path | None = None) -> dict:

@@ -7,6 +7,7 @@ from xiaojuju_core.state import load_life_state, update_life_state
 from xiaojuju_core.memory import retrieve_memories, append_memory_event
 from xiaojuju_core.contacts import load_wechat_contacts, contact_key
 from xiaojuju_core.config import load_config
+from xiaojuju_core.outbox import pending_messages, mark_message
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
@@ -277,6 +278,7 @@ def read_text(path, limit=8000):
 def persona_context():
     parts = []
     for rel in (
+        '\u4eba\u683c\u5baa\u6cd5.md',
         '\u4eba\u683c\u6838\u5fc3.md',
         '\u5173\u7cfb\u89c4\u5219.md',
         '\u6743\u9650\u7b56\u7565.yaml',
@@ -559,10 +561,32 @@ def process_contact(contact, prime=False):
     return True
 
 
+def process_outbox(allowed_contacts):
+    allowed=set(allowed_contacts)
+    sent=0
+    for msg in pending_messages():
+        contact=msg.get("contact", "")
+        if contact not in allowed:
+            continue
+        try:
+            ok=send_text(msg.get("text",""), contact=contact)
+        except Exception as exc:
+            mark_message(msg["id"], "queued", repr(exc))
+            continue
+        if ok:
+            mark_message(msg["id"], "sent")
+            sent += 1
+        else:
+            mark_message(msg["id"], "queued", "send failed")
+        if sent >= 2:
+            break
+    return sent
+
+
 def run_once(prime=False):
     configured = load_wechat_contacts(CONTACTS_CONFIG)
     contacts = [x['name'] for x in configured] or [PERSONA_CHAT_TITLE]
-    touched = False
+    touched = process_outbox(contacts) > 0
     for contact in contacts[:MAX_CONTACTS_PER_TICK]:
         try:
             touched = process_contact(contact, prime=prime) or touched
