@@ -221,7 +221,7 @@ class EventService:
         if accepted.shadow:
             return accepted
         stored = await self.store.get_event(accepted.event_id)
-        if stored["status"] in {"completed", "processing"}:
+        if stored["status"] in {"completed", "processing", "failed", "denied"}:
             return accepted
         if stored["status"] == "received":
             await self.store.mark_status(accepted.event_id, "queued")
