@@ -7,8 +7,13 @@ CREATE TABLE IF NOT EXISTS app_events (
     external_id TEXT,
     payload JSONB NOT NULL,
     trace_id TEXT NOT NULL,
+    traceparent TEXT NOT NULL DEFAULT '',
+    timestamp TIMESTAMPTZ NOT NULL,
     shadow BOOLEAN NOT NULL DEFAULT TRUE,
     result JSONB,
+    published_at TIMESTAMPTZ,
+    claim_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'received'
         CHECK (status IN ('received','queued','processing','completed','failed','denied')),
     attempts INTEGER NOT NULL DEFAULT 0,
@@ -53,5 +58,29 @@ CREATE TABLE IF NOT EXISTS app_tool_runs (
 """
 
 
+UPGRADE_SQL = """
+ALTER TABLE app_events ADD COLUMN IF NOT EXISTS traceparent TEXT NOT NULL DEFAULT '';
+ALTER TABLE app_events ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ;
+ALTER TABLE app_events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+ALTER TABLE app_events ADD COLUMN IF NOT EXISTS claim_token TEXT;
+ALTER TABLE app_events ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'app_events' AND column_name = 'event_timestamp'
+    ) THEN
+        EXECUTE 'UPDATE app_events SET timestamp = event_timestamp WHERE timestamp IS NULL';
+    END IF;
+END $$;
+UPDATE app_events SET timestamp = created_at WHERE timestamp IS NULL;
+ALTER TABLE app_events ALTER COLUMN timestamp SET NOT NULL;
+CREATE INDEX IF NOT EXISTS app_events_unpublished_idx
+    ON app_events (created_at)
+    WHERE published_at IS NULL AND result IS NULL AND shadow = false;
+"""
+
+
 async def upgrade(conn) -> None:
     await conn.execute(SCHEMA_SQL)
+    await conn.execute(UPGRADE_SQL)

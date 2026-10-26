@@ -24,6 +24,15 @@ def make_shadow_event(row: dict) -> IncomingEvent:
     )
 
 
+def request_headers(event: IncomingEvent) -> dict[str, str]:
+    return {
+        "Idempotency-Key": event.event_id,
+        "X-XiaoJuJu-Source": "shadow",
+        "X-XiaoJuJu-User": event.contact_id or "owner",
+        "X-XiaoJuJu-Shadow": "true",
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -45,7 +54,7 @@ def main() -> None:
                     "model": "xiaojuju",
                     "messages": [{"role": "user", "content": row.get("user", "")}],
                 },
-                headers={"Idempotency-Key": event.event_id},
+                headers=request_headers(event),
                 timeout=120,
             )
             response.raise_for_status()

@@ -9,3 +9,4 @@ class ConversationState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     reply: str
     trace_id: str
+    identity_hash: str

@@ -19,7 +19,7 @@ class Database:
 
     async def open(self) -> None:
         await self.pool.open()
-        await self.pool.wait()
+        await self.pool.wait(timeout=5)
 
     async def close(self) -> None:
         await self.pool.close()

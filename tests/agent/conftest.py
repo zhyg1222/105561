@@ -9,15 +9,31 @@ import pgserver.postgres_server as pgserver_module
 import pytest
 import pytest_asyncio
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pgserver.postgres_server import PostgresServer
 
+from tests.agent.helpers import FakeEventService, IdempotentProcessor
 from xiaojuju_agent.api import create_app
 from xiaojuju_agent.db import Database
-from xiaojuju_agent.events import EventStore, SubmitResult
+from xiaojuju_agent.events import EventStore
 from xiaojuju_agent.settings import Settings
 
 if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+SPAN_EXPORTER = InMemorySpanExporter()
+_TRACE_PROVIDER = TracerProvider()
+_TRACE_PROVIDER.add_span_processor(SimpleSpanProcessor(SPAN_EXPORTER))
+trace.set_tracer_provider(_TRACE_PROVIDER)
+
+
+@pytest.fixture
+def span_exporter():
+    SPAN_EXPORTER.clear()
+    return SPAN_EXPORTER
 
 
 @pytest.fixture(scope="session")
@@ -48,7 +64,7 @@ def pg_container():
 async def event_store(pg_container):
     settings = Settings(
         database_url=pg_container.get_uri(),
-        valkey_url="valkey://127.0.0.1:6379/15",
+        valkey_url="redis://127.0.0.1:6379/15",
         opa_url="http://127.0.0.1:8181",
         environment="test",
     )
@@ -78,33 +94,23 @@ async def postgres_saver(pg_container):
         await manager.__aexit__(None, None, None)
 
 
-class FakeGraph:
-    async def ainvoke(self, state, config):
-        return {"reply": "\u6536\u5230\uff1a" + state["user_text"], "messages": []}
-
-
-class FakeEventService:
-    async def submit(self, event, dispatch):
-        return SubmitResult(True, "received", event.shadow)
-
-
-class FailingEventService:
-    async def submit(self, event, dispatch):
-        raise ConnectionError("postgres down")
-
-
 @pytest.fixture
 def app():
     return create_app(
-        FakeEventService(), FakeGraph(), dispatch=lambda event_id: None, policy_client=None
+        event_service=FakeEventService(),
+        process_event=IdempotentProcessor(),
+        dispatch=lambda event_id: None,
+        policy_client=None,
+        force_shadow=True,
     )
 
 
 @pytest.fixture
 def failing_app():
     return create_app(
-        FailingEventService(),
-        FakeGraph(),
+        event_service=FakeEventService(fail=True),
+        process_event=IdempotentProcessor(),
         dispatch=lambda event_id: None,
         policy_client=None,
+        force_shadow=True,
     )

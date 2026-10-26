@@ -11,3 +11,7 @@ mobile-preview.png
 coverage.xml
 .pytest_cache/
 .ruff_cache/
+deploy/agent.env
+pytest-of-Administrator/
+tmp*/
+tmp*

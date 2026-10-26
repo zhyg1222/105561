@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from opentelemetry.propagate import inject
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +15,12 @@ class IncomingEvent(BaseModel):
     payload: dict[str, Any]
     trace_id: str = Field(min_length=1)
     shadow: bool = True
+
+    @property
+    def traceparent(self) -> str:
+        carrier = {}
+        inject(carrier)
+        return carrier.get("traceparent", "")
 
 
 class ReplyResult(BaseModel):
@@ -31,3 +38,4 @@ class PolicyInput(BaseModel):
     contact_id: str | None = None
     risk: str = "normal"
     shadow: bool = True
+    side_effect: bool = True

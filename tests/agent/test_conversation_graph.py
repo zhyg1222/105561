@@ -3,6 +3,9 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from xiaojuju_agent.graph.conversation import build_conversation_graph
+from xiaojuju_agent.identity import IdentityBundle
+
+IDENTITY = IdentityBundle(content="private identity", sha256="a" * 64)
 
 
 class EchoModel:
@@ -10,32 +13,38 @@ class EchoModel:
         self.calls = []
 
     async def ainvoke(self, messages):
-        self.calls.append([message.content for message in messages])
-        return AIMessage(content="收到：" + messages[-1].content)
+        self.calls.append([(message.type, message.content) for message in messages])
+        return AIMessage(content="echo: " + messages[-1].content)
 
 
 @pytest.mark.asyncio
 async def test_graph_checkpoints_thread():
     model = EchoModel()
-    graph = build_conversation_graph(model, InMemorySaver())
+    graph = build_conversation_graph(model, InMemorySaver(), IDENTITY)
     config = {"configurable": {"thread_id": "owner"}}
-    await graph.ainvoke({"user_text": "第一句"}, config)
-    second = await graph.ainvoke({"user_text": "第二句"}, config)
-    assert model.calls[1] == ["第一句", "收到：第一句", "第二句"]
-    assert second["messages"][-4].content == "第一句"
-    assert second["reply"] == "收到：第二句"
+    await graph.ainvoke({"user_text": "first", "messages": []}, config)
+    second = await graph.ainvoke({"user_text": "second", "messages": []}, config)
+
+    assert model.calls[1] == [
+        ("system", "private identity"),
+        ("human", "first"),
+        ("ai", "echo: first"),
+        ("human", "second"),
+    ]
+    assert second["reply"] == "echo: second"
+    assert not [message for message in second["messages"] if message.type == "system"]
 
 
 @pytest.mark.asyncio
 async def test_postgres_checkpoint_roundtrip(postgres_saver):
     model = EchoModel()
-    graph = build_conversation_graph(model, postgres_saver)
+    graph = build_conversation_graph(model, postgres_saver, IDENTITY)
     config = {"configurable": {"thread_id": "owner-pg"}}
-    await graph.ainvoke({"user_text": "\u6301\u4e45\u5316"}, config)
+    await graph.ainvoke({"user_text": "persisted"}, config)
     snapshot = await graph.aget_state(config)
-    assert snapshot.values["reply"] == "\u6536\u5230\uff1a\u6301\u4e45\u5316"
+    assert snapshot.values["reply"] == "echo: persisted"
 
     recreated_model = EchoModel()
-    recreated_graph = build_conversation_graph(recreated_model, postgres_saver)
-    await recreated_graph.ainvoke({"user_text": "\u7b2c\u4e8c\u53e5"}, config)
-    assert recreated_model.calls[0][0] == "\u6301\u4e45\u5316"
+    recreated_graph = build_conversation_graph(recreated_model, postgres_saver, IDENTITY)
+    await recreated_graph.ainvoke({"user_text": "second"}, config)
+    assert recreated_model.calls[0][1] == ("human", "persisted")
