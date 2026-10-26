@@ -44,3 +44,9 @@ D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe D:\yige-pe
 ```
 
 Windows 计划任务：`XiaoJuJu-Autonomy`，每 15 分钟执行一次 `--once`。安全限制为每日最多 4 次活动、间隔至少 120 分钟、00:00—07:30 静默。
+## 服务与入口
+
+- 微信 worker：`apps/phone_agent/phone_agent.py`
+- 人格测试：`apps/phone_agent/persona_test.py`
+- 统一大脑：`run_brain_gateway.py`，端口 `12400`
+- 直播预览：`vendor/open-llm-vtuber`，端口 `12393`
