@@ -8,6 +8,7 @@ import pgserver
 import pgserver.postgres_server as pgserver_module
 import pytest
 import pytest_asyncio
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pgserver.postgres_server import PostgresServer
 
 from xiaojuju_agent.db import Database
@@ -63,3 +64,14 @@ async def event_store(pg_container):
         yield EventStore(db)
     finally:
         await db.close()
+
+
+@pytest_asyncio.fixture
+async def postgres_saver(pg_container):
+    manager = AsyncPostgresSaver.from_conn_string(pg_container.get_uri())
+    saver = await manager.__aenter__()
+    await saver.setup()
+    try:
+        yield saver
+    finally:
+        await manager.__aexit__(None, None, None)
