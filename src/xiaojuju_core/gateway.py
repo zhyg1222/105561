@@ -1,7 +1,7 @@
 import json, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
-from .brain import respond_event
+from .pipeline import process_event
 
 def extract_last_user_text(payload: dict) -> str:
     for msg in reversed(payload.get("messages", [])):
@@ -37,7 +37,7 @@ def _event(payload: dict, headers=None) -> dict:
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-def chat_completion_payload(payload: dict, responder=respond_event) -> dict:
+def chat_completion_payload(payload: dict, responder=process_event) -> dict:
     event = _event(payload)
     result = responder(event)
     return {
@@ -61,7 +61,7 @@ def sse_lines(text: str, model: str = "xiaojuju", event_id: str | None = None):
     yield "data: [DONE]\n\n"
 
 class Handler(BaseHTTPRequestHandler):
-    responder = staticmethod(respond_event)
+    responder = staticmethod(process_event)
     def log_message(self, fmt, *args):
         return
     def _send_json(self, code, data):

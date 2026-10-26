@@ -12,13 +12,17 @@ def _load(path):
         return {"version":1,"messages":[]}
     return data
 
-def enqueue_message(contact: str, text: str, kind: str = "message", outbox_path: Path | None = None) -> dict:
+def enqueue_message(contact: str, text: str, kind: str = "message", outbox_path: Path | None = None, message_id: str | None = None) -> dict:
     contact=str(contact).strip(); text=str(text).strip()
     if not contact or not text:
         raise ValueError("contact and text are required")
     path=Path(outbox_path) if outbox_path else OUTBOX
     data=_load(path)
-    item={"id":uuid.uuid4().hex,"contact":contact,"text":text,"kind":kind,"status":"queued","attempts":0,"created_epoch":time.time(),"last_error":""}
+    message_id=str(message_id or uuid.uuid4().hex)
+    for existing in data["messages"]:
+        if existing.get("id")==message_id:
+            return existing
+    item={"id":message_id,"contact":contact,"text":text,"kind":kind,"status":"queued","attempts":0,"created_epoch":time.time(),"last_error":""}
     data["messages"].append(item); atomic_write_json(path,data); return item
 
 def pending_messages(outbox_path: Path | None = None, contact: str | None = None) -> list[dict]:

@@ -5,8 +5,10 @@ from .activity import run_activity
 from .audit import audit_event
 from .config import load_config
 from .daily_plan import ensure_daily_plan
+from .event_bus import EventBus
 from .goals import add_goal, next_goal, set_goal_status
 from .curiosity import add_interest, next_interest, mark_interest
+from .memory import append_memory_event
 from .permissions import check_permission
 from .reflection import write_daily_reflection
 from .state import load_life_state
@@ -33,6 +35,49 @@ def _activity_rows(path: Path) -> list[dict]:
 def _clock(value: str) -> dtime:
     hour, minute = str(value).split(":", 1)
     return dtime(int(hour), int(minute))
+
+
+def _apply_result(paths, goal: dict, result: dict, now: datetime, bus_event_id: str) -> None:
+    activity_path = paths.activities / f"{now.strftime('%Y-%m-%d')}.jsonl"
+    interest_path = paths.persona / "\u81ea\u4e3b\u751f\u6d3b" / "\u5174\u8da3" / "\u5173\u6ce8\u961f\u5217.json"
+    if result.get("status") == "done":
+        set_goal_status(goal["id"], "done", result.get("path", ""), paths.goals)
+        if goal.get("interest_id"):
+            mark_interest(goal["interest_id"], "done", result.get("path", ""), interest_path)
+        if result.get("follow_up"):
+            add_interest(result["follow_up"], "\u7531\u4e0a\u6b21\u81ea\u4e3b\u7814\u7a76\u4ea7\u751f", interests_path=interest_path)
+        try:
+            append_memory_event(
+                goal.get("title", "\u81ea\u4e3b\u6d3b\u52a8"),
+                f"\u5b8c\u6210\uff0c\u6210\u679c\u5b58\u653e\u5728\uff1a{result.get('path', '')}",
+                events_path=paths.memory_events,
+                contact="\u81ea\u5df1",
+                event_id="research-memory:" + bus_event_id,
+                source="research",
+                metadata={"goal_id": goal.get("id"), "result_path": result.get("path", "")},
+            )
+        except Exception:
+            pass
+    else:
+        set_goal_status(goal["id"], "failed", result.get("error", "failed"), paths.goals)
+        if goal.get("interest_id"):
+            mark_interest(goal["interest_id"], "failed", result.get("error", "failed"), interest_path)
+    existed = any(row.get("bus_event_id") == bus_event_id for row in _activity_rows(activity_path))
+    if not existed:
+        row = {
+            "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "epoch": now.timestamp(),
+            "bus_event_id": bus_event_id,
+            "goal_id": goal.get("id"),
+            "goal": goal.get("title", ""),
+            "status": result.get("status"),
+            "result_path": result.get("path", ""),
+            "error": result.get("error", ""),
+        }
+        append_jsonl(activity_path, row)
+    audit_event("\u5c0f\u5c45\u5c45", "research", goal.get("title", ""), result.get("status", ""), paths.audit)
+    if now.time() >= dtime(22, 0):
+        write_daily_reflection(now.strftime("%Y-%m-%d"), activity_path, paths.reflection)
 
 
 def tick(paths, now: datetime, runner=None, dry_run: bool = False, config: dict | None = None) -> dict:
@@ -71,41 +116,39 @@ def tick(paths, now: datetime, runner=None, dry_run: bool = False, config: dict 
             interest_id = ""
         add_goal(title, "self", 10, detail=detail, goals_path=paths.goals, interest_id=interest_id)
         goal = next_goal(paths.goals)
-    if not goal and not auto.get("allow_self_goals", True):
-        return {"status": "no_goal"}
     if not goal:
         return {"status": "no_goal"}
     action = "research" if goal.get("permission") == "internal" else goal.get("permission", "research")
     decision, reason = check_permission(action, goal.get("source", "self"))
     if decision != "allow":
-        audit_event("小居居", action, goal.get("title", ""), decision, paths.audit)
+        audit_event("\u5c0f\u5c45\u5c45", action, goal.get("title", ""), decision, paths.audit)
         return {"status": "permission_blocked", "decision": decision, "reason": reason}
     if dry_run:
         return {"status": "dry_run", "goal": goal}
-    state = load_life_state(paths.state)
-    result = run_activity(goal, state, now.strftime("%Y-%m-%d %H:%M:%S"), runner, paths.output)
-    if result.get("status") == "done":
-        set_goal_status(goal["id"], "done", result.get("path", ""), paths.goals)
-        interest_path = paths.persona / "自主生活" / "兴趣" / "关注队列.json"
-        if goal.get("interest_id"):
-            mark_interest(goal["interest_id"], "done", result.get("path", ""), interest_path)
-        if result.get("follow_up"):
-            add_interest(result["follow_up"], "由上次自主研究产生", interests_path=interest_path)
-    else:
-        set_goal_status(goal["id"], "failed", result.get("error", "failed"), paths.goals)
-        if goal.get("interest_id"):
-            mark_interest(goal["interest_id"], "failed", result.get("error", "failed"), paths.persona / "自主生活" / "兴趣" / "关注队列.json")
-    row = {
-        "time": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "epoch": now.timestamp(),
-        "goal_id": goal.get("id"),
-        "goal": goal.get("title", ""),
-        "status": result.get("status"),
-        "result_path": result.get("path", ""),
-        "error": result.get("error", ""),
-    }
-    append_jsonl(activity_path, row)
-    audit_event("小居居", action, goal.get("title", ""), result.get("status", ""), paths.audit)
-    if now.time() >= dtime(22, 0):
-        write_daily_reflection(now.strftime("%Y-%m-%d"), activity_path, paths.reflection)
-    return {"status": result.get("status"), "goal": goal.get("title", ""), "result": result}
+
+    bus_event_id = "autonomy:" + str(goal["id"])
+    with EventBus(paths.event_bus) as bus:
+        bus.enqueue(
+            bus_event_id,
+            "autonomy.task",
+            {"goal": goal, "scheduled_for": now.strftime("%Y-%m-%d %H:%M:%S")},
+            priority=20,
+        )
+        existing = bus.get(bus_event_id)
+        if existing and existing.get("status") == "completed":
+            saved = existing.get("result") or {}
+            if isinstance(saved, dict) and isinstance(saved.get("result"), dict):
+                _apply_result(paths, goal, saved["result"], now, bus_event_id)
+                return {"status": saved["result"].get("status"), "goal": goal.get("title", ""), "result": saved["result"], "recovered": True}
+        claimed = bus.claim(bus_event_id)
+        if claimed is None:
+            return {"status": "bus_busy", "goal": goal.get("title", ""), "bus_status": (existing or {}).get("status")}
+        state = load_life_state(paths.state)
+        try:
+            result = run_activity(goal, state, now.strftime("%Y-%m-%d %H:%M:%S"), runner, paths.output)
+        except Exception as exc:
+            result = {"status": "failed", "error": repr(exc)}
+        package = {"status": result.get("status"), "goal": goal.get("title", ""), "result": result}
+        bus.complete(bus_event_id, package)
+        _apply_result(paths, goal, result, now, bus_event_id)
+        return {"status": result.get("status"), "goal": goal.get("title", ""), "result": result}

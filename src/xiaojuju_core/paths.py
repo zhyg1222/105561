@@ -15,6 +15,14 @@ class Paths:
     audit: Path
     paused: Path
 
+    @property
+    def memory_db(self) -> Path:
+        return self.persona / "\u8bb0\u5fc6" / "\u8bb0\u5fc6.db"
+
+    @property
+    def event_bus(self) -> Path:
+        return self.persona / "\u4e8b\u4ef6\u603b\u7ebf" / "\u4e8b\u4ef6.db"
+
     @classmethod
     def production(cls):
         from .config import load_config

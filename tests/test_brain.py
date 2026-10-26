@@ -1,8 +1,12 @@
 import json, tempfile, unittest
 from pathlib import Path
-from xiaojuju_core.brain import respond_event
+from xiaojuju_core.brain import PATHS, _memory_path, respond_event
 
 class BrainTests(unittest.TestCase):
+    def test_all_contacts_share_the_central_memory_database(self):
+        event={"source":"wechat","user_id":"guest"}
+        self.assertEqual(_memory_path(event), PATHS.memory_events)
+
     def test_reply_updates_state_and_memory(self):
         calls=[]
         def model(system,user):

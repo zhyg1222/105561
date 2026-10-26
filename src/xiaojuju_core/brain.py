@@ -1,8 +1,8 @@
-import hashlib, json, os, re, subprocess, threading, time
+import json, os, re, subprocess, threading, time
 from pathlib import Path
 from urllib.request import Request, urlopen
 from .audit import audit_event
-from .memory import append_memory_event, retrieve_memories
+from .memory import append_memory_event, get_memory_event, retrieve_memories
 from .paths import Paths
 from .state import update_life_state
 
@@ -16,12 +16,9 @@ _CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 600
 
 def _memory_path(event, override=None):
-    if override:
-        return Path(override)
-    if event.get("source") == "wechat" and event.get("user_id") == "大哥":
-        return PATHS.memory_events
-    key = hashlib.sha1(f"{event.get('source')}:{event.get('user_id')}".encode()).hexdigest()[:16]
-    return PATHS.persona / "记忆" / "访客" / f"{key}.jsonl"
+    # One SQLite database is shared by all contacts; the contact column is the
+    # isolation boundary. JSONL is kept as the readable append-only backup.
+    return Path(override) if override else PATHS.memory_events
 
 def _default_model(system: str, user: str, max_tokens: int = 220) -> str:
     key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
@@ -105,11 +102,30 @@ def respond_event(event: dict, model_fn=None, search_fn=None, state_path=None, m
         cached = _CACHE.get(event_id)
         if cached and now - cached[0] < _CACHE_TTL:
             return cached[1]
+    mem_path = _memory_path(event, memory_events_path)
+    previous = get_memory_event(event_id, mem_path)
+    if previous and previous.get("assistant_text"):
+        saved = (previous.get("metadata") or {}).get("response")
+        if isinstance(saved, dict) and saved.get("reply"):
+            with _CACHE_LOCK:
+                _CACHE[event_id] = (now, saved)
+            return saved
+        recovered = {
+            "event_id": event_id,
+            "reply": previous["assistant_text"],
+            "should_respond": True,
+            "decision": {"move": "\u63a5\u8bdd", "emotion": "\u677e\u5f1b", "intent": "\u5ef6\u7eed\u4e0a\u6b21\u56de\u5e94", "needs_web": False},
+            "sources": [],
+        }
+        with _CACHE_LOCK:
+            _CACHE[event_id] = (now, recovered)
+        return recovered
     model = model_fn or _default_model
     search = search_fn or _default_search
     state = update_life_state(text, state_path=state_path)
-    mem_path = _memory_path(event, memory_events_path)
-    memories = retrieve_memories(text, events_path=mem_path, limit=4)
+    memories = retrieve_memories(
+        text, events_path=mem_path, limit=4, contact=event.get("user_id", "unknown")
+    )
     system = _system_prompt(state, memories)
     user = f"最近对话：\n{_history_text(event)}\n\n老大刚说：{text}"
     raw = model(system, user)
