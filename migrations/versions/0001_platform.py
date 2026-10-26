@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS app_events (
     payload JSONB NOT NULL,
     trace_id TEXT NOT NULL,
     shadow BOOLEAN NOT NULL DEFAULT TRUE,
+    result JSONB,
     status TEXT NOT NULL DEFAULT 'received'
         CHECK (status IN ('received','queued','processing','completed','failed','denied')),
     attempts INTEGER NOT NULL DEFAULT 0,

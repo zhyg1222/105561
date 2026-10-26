@@ -36,7 +36,7 @@ class EventStore:
         async with self.db.transaction() as conn:
             cur = await conn.execute(
                 "SELECT event_id, source, kind, contact_id, external_id, payload, "
-                "trace_id, shadow, status, attempts, last_error FROM app_events "
+                "trace_id, shadow, result, status, attempts, last_error FROM app_events "
                 "WHERE event_id = %s",
                 (event_id,),
             )
@@ -57,6 +57,16 @@ class EventStore:
                     last_error=%s, updated_at=now() WHERE event_id=%s
                 """,
                 (error[:4000], event_id),
+            )
+
+    async def save_result(self, event_id: str, result: dict) -> None:
+        async with self.db.transaction() as conn:
+            await conn.execute(
+                """
+                UPDATE app_events SET status='completed', result=%s::jsonb,
+                    updated_at=now() WHERE event_id=%s
+                """,
+                (json.dumps(result, ensure_ascii=False), event_id),
             )
 
     async def count_outbox(self) -> int:

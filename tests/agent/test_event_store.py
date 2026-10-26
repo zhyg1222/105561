@@ -20,3 +20,20 @@ async def test_event_id_is_idempotent(event_store):
     stored = await event_store.get_event("event-1")
     assert stored["status"] == "received"
     assert stored["payload"] == {"text": "你好"}
+
+
+@pytest.mark.asyncio
+async def test_event_result_roundtrip(event_store):
+    event = IncomingEvent(
+        event_id="event-result",
+        source="shadow",
+        kind="message",
+        payload={"text": "hello"},
+        trace_id="trace-result",
+        shadow=True,
+    )
+    await event_store.insert_event(event)
+    await event_store.save_result("event-result", {"reply": "saved"})
+    stored = await event_store.get_event("event-result")
+    assert stored["status"] == "completed"
+    assert stored["result"] == {"reply": "saved"}
