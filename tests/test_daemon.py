@@ -1,4 +1,4 @@
-import tempfile, unittest
+import json, tempfile, unittest
 from datetime import datetime
 from pathlib import Path
 from xiaojuju_core.daemon import tick
@@ -15,6 +15,15 @@ class DaemonTests(unittest.TestCase):
             add_goal("研究直播", "self", 10, goals_path=p.goals)
             out = tick(p, datetime(2026,10,26,3,0), lambda prompt: {"title":"x","markdown":"x"})
             self.assertEqual(out["status"], "quiet_hours")
+    def test_creates_self_goal_when_queue_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = test_paths(Path(d)); p.daily_plans.mkdir(parents=True)
+            runner = lambda prompt: {"title":"自主观察","markdown":"# 我看到的\n\n人们喜欢被认真回应。"}
+            out = tick(p, datetime(2026,10,26,10,0), runner)
+            self.assertEqual(out["status"], "done")
+            data = json.loads(p.goals.read_text(encoding="utf-8"))
+            self.assertEqual(data["goals"][0]["source"], "self")
+            self.assertTrue(data["goals"][0]["title"])
     def test_one_activity_per_tick_and_gap(self):
         with tempfile.TemporaryDirectory() as d:
             p = test_paths(Path(d)); p.daily_plans.mkdir(parents=True)
@@ -25,3 +34,12 @@ class DaemonTests(unittest.TestCase):
             second = tick(p, datetime(2026,10,26,10,15), runner)
             self.assertEqual(first["status"], "done")
             self.assertEqual(second["status"], "activity_gap")
+    def test_writes_reflection_at_night(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = test_paths(Path(d)); p.daily_plans.mkdir(parents=True)
+            add_goal("夜间研究", "self", 10, goals_path=p.goals)
+            out = tick(p, datetime(2026,10,26,22,5), lambda prompt: {"title":"夜间成果","markdown":"完成"})
+            self.assertEqual(out["status"], "done")
+            reflection = Path(d) / "reflection" / "2026-10-26.md"
+            self.assertTrue(reflection.exists())
+            self.assertIn("夜间研究", reflection.read_text(encoding="utf-8"))
