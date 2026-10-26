@@ -48,3 +48,20 @@ http://127.0.0.1:12393
 - D:\yige-personal-kb\.runtime\huggingface：Hugging Face 缓存
 - D:\yige-personal-kb\.runtime\torch：Torch 缓存
 - endor/open-llm-vtuber/models/faster-whisper-base：本地 ASR 模型
+
+## 开源状态（重要）
+
+- DeepSeek Harness：MIT，开源。
+- Open-LLM-VTuber：MIT，开源；Live2D 示例模型另有许可。
+- Faster-Whisper：MIT；当前 Whisper base 模型为 MIT。
+- Sherpa-ONNX：Apache 许可，开源；当前中文 VITS 模型由社区训练，仓库未给出清晰的统一商用许可证，正式商用前需单独核实。
+- 当前 TTS：`sherpa-onnx-vits-zh-ll`，本地 CPU 离线运行，不再使用 Edge TTS。
+- DeepSeek 模型：当前通过官方 API 调用，模型服务本身不是完全本地/开源部署。
+- Live2D Cubism 运行时和示例形象：不是完全开源，商业直播前必须取得相应许可或替换为自建可用形象。
+- 本项目主仓库目前没有添加 LICENSE 文件，因此还不能宣称自身代码已正式开源。
+
+## 自然对话
+
+- 已使用独立的直播短对话提示词 `prompts/live_persona.md`。
+- 不再把完整制度文件塞入每次对话提示。
+- 真实 WebSocket 测试：输入“介绍一下自己”，返回两句短回复并成功生成两段音频。
