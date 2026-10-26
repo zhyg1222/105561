@@ -45,3 +45,8 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[dependency-groups]
+dev = [
+    "pgserver==0.1.4",
+]
