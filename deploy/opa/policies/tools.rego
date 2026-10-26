@@ -11,3 +11,11 @@ decision := {"effect": "allow", "reason": "owner_message"} if {
     input.contact_id == "owner"
     input.shadow == false
 }
+decision := {"effect": "require_approval", "reason": "public_publish"} if {
+    input.tool == "browser.publish"
+}
+
+decision := {"effect": "deny", "reason": "shadow_side_effect"} if {
+    input.shadow == true
+    startswith(input.tool, "message.")
+}
