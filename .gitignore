@@ -8,3 +8,6 @@ runtime/
 *.log
 *.zip
 mobile-preview.png
+coverage.xml
+.pytest_cache/
+.ruff_cache/
