@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from .contracts import IncomingEvent
 
@@ -62,3 +64,28 @@ class EventStore:
             cur = await conn.execute("SELECT COUNT(*) AS n FROM app_outbox")
             row = await cur.fetchone()
             return int(row["n"])
+
+
+@dataclass(frozen=True)
+class SubmitResult:
+    accepted: bool
+    status: str
+    shadow: bool
+
+
+class EventService:
+    def __init__(self, store: EventStore):
+        self.store = store
+
+    async def submit(self, event: IncomingEvent, dispatch: Callable[[str], None]) -> SubmitResult:
+        inserted = await self.store.insert_event(event)
+        if not inserted:
+            existing = await self.store.get_event(event.event_id)
+            if existing is None:
+                raise RuntimeError("event insert conflict without a stored event")
+            return SubmitResult(False, existing["status"], bool(existing["shadow"]))
+        if not event.shadow:
+            await self.store.mark_status(event.event_id, "queued")
+            dispatch(event.event_id)
+            return SubmitResult(True, "queued", False)
+        return SubmitResult(True, "received", True)

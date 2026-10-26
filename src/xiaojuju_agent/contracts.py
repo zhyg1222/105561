@@ -14,3 +14,20 @@ class IncomingEvent(BaseModel):
     payload: dict[str, Any]
     trace_id: str = Field(min_length=1)
     shadow: bool = True
+
+
+class ReplyResult(BaseModel):
+    event_id: str
+    reply: str
+    should_respond: bool = True
+    trace_id: str
+
+
+class PolicyInput(BaseModel):
+    actor: str
+    source: str
+    tool: str
+    args: dict[str, Any]
+    contact_id: str | None = None
+    risk: str = "normal"
+    shadow: bool = True
