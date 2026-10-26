@@ -1,12 +1,19 @@
 import json
+import logging
 import time
 import uuid
 from collections.abc import Iterator
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from opentelemetry import trace
+from psycopg import Error as PsycopgError
+from psycopg_pool import PoolClosed, PoolTimeout
 
 from .contracts import IncomingEvent
+
+logger = logging.getLogger(__name__)
 
 
 def last_user_text(payload: dict) -> str:
@@ -86,6 +93,33 @@ def create_app(event_service, graph, dispatch, policy_client) -> FastAPI:
             "shadow": result.shadow,
         }
 
+    @app.get("/readyz")
+    async def readyz(request: Request):
+        runtime = getattr(request.app.state, "runtime", None)
+        checks = {"postgres": False, "opa": False}
+        if runtime is not None:
+            try:
+                async with runtime.db.transaction() as conn:
+                    await conn.execute("SELECT 1")
+                checks["postgres"] = True
+            except (PsycopgError, PoolClosed, PoolTimeout, OSError) as exc:
+                logger.warning("postgres readiness check failed: %s", exc)
+        if policy_client is not None:
+            try:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    response = await client.get(policy_client.base_url + "/health")
+                    checks["opa"] = response.status_code == 200
+            except (httpx.HTTPError, OSError) as exc:
+                logger.warning("opa readiness check failed: %s", exc)
+        code = 200 if all(checks.values()) else 503
+        return JSONResponse(
+            {
+                "status": "ready" if code == 200 else "not_ready",
+                "checks": checks,
+            },
+            status_code=code,
+        )
+
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
         payload = await request.json()
@@ -95,10 +129,15 @@ def create_app(event_service, graph, dispatch, policy_client) -> FastAPI:
         event_id = request.headers.get("Idempotency-Key") or uuid.uuid4().hex
         source = request.headers.get("X-XiaoJuJu-Source", "live")
         contact = request.headers.get("X-XiaoJuJu-User", "owner")
-        result = await graph.ainvoke(
-            {"user_text": text, "messages": [], "trace_id": event_id},
-            {"configurable": {"thread_id": f"{source}:{contact}"}},
-        )
+        tracer = trace.get_tracer("xiaojuju.api")
+        with tracer.start_as_current_span("chat.completion") as span:
+            span.set_attribute("event_id", event_id)
+            span.set_attribute("source", source)
+            span.set_attribute("contact_id", contact)
+            result = await graph.ainvoke(
+                {"user_text": text, "messages": [], "trace_id": event_id},
+                {"configurable": {"thread_id": f"{source}:{contact}"}},
+            )
         model = payload.get("model", "xiaojuju")
         if payload.get("stream"):
             return StreamingResponse(

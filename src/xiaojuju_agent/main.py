@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from .api import create_app
 from .events import EventService
+from .observability import configure_observability
 from .policy import PolicyClient
 from .queue_app import process_event
 from .runtime import AgentRuntime
@@ -46,6 +47,7 @@ def create_production_app():
         policy_client=policy,
     )
     app.router.lifespan_context = lifespan
+    configure_observability(settings, app=app)
     return app
 
 
