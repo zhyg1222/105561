@@ -102,7 +102,13 @@
     "brain_gateway_url": "http://127.0.0.1:12400",
     "open_llm_url": "http://127.0.0.1:12393",
     "timezone": "Asia/Shanghai",
-    "data_root": "D:\\yige-personal-kb\\12_社交代理\\小居居"
+    "data_root": "D:\\yige-personal-kb\\12_社交代理\\小居居",
+    "phone_control": {
+      "mode": "usb_only",
+      "wireless_enabled": false,
+      "usb_serial": "",
+      "wireless_serial": ""
+    }
   },
   "goals": {
     "money_research_enabled": true,

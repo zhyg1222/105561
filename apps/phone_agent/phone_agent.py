@@ -8,6 +8,7 @@ from xiaojuju_core.memory import retrieve_memories, append_memory_event
 from xiaojuju_core.contacts import load_wechat_contacts, contact_key
 from xiaojuju_core.config import load_config
 from xiaojuju_core.outbox import pending_messages, mark_message
+from xiaojuju_core.adb_control import select_serial
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
@@ -18,9 +19,12 @@ STATE = RUNTIME / 'state.json'
 STATE_DIR = RUNTIME / 'contact-states'
 LOG = RUNTIME / 'phone-agent.log'
 MEMORY = KB / '12_社交代理' / '小居居' / '记忆' / '大哥.md'
+CONFIG = load_config()
 ADB = Path(r'D:\yige-personal-kb\.runtime\android-tools\extracted\platform-tools\adb.exe')
-ADB_WIRELESS = '192.168.0.14:5555'
-ADB_USB = 'VO6XX4W445AUUWXW'
+ADB_WIRELESS = CONFIG['runtime'].get('phone_control', {}).get('wireless_serial', '192.168.0.14:5555')
+ADB_USB = CONFIG['runtime'].get('phone_control', {}).get('usb_serial', 'VO6XX4W445AUUWXW')
+PHONE_CONTROL_MODE = CONFIG['runtime'].get('phone_control', {}).get('mode', 'usb_only')
+PHONE_WIRELESS_ENABLED = bool(CONFIG['runtime'].get('phone_control', {}).get('wireless_enabled', False))
 DSH_HOME = Path(r'D:\yige-personal-kb\.runtime\dsh-personal\home')
 DSH_BIN = Path(r'D:\yige-personal-kb\.runtime\dsh-personal\node_modules\@deepseek-ai\dsh\lib\bin.js')
 DSH_PROFILE = 'xiaojuju'
@@ -30,13 +34,13 @@ IME_ORIGINAL = 'com.iflytek.inputmethod.miui/.FlyIME'
 WECHAT_USER = '999'
 WECHAT_ACTIVITY = 'com.tencent.mm/.ui.LauncherUI'
 PERSONA_CHAT_TITLE = '\u5927\u54e5'
-CONFIG = load_config()
 CONTACTS_CONFIG = Path(CONFIG['social']['wechat_contacts_file'])
 MAX_CONTACTS_PER_TICK = int(CONFIG['social'].get('max_contacts_per_tick', 5))
 BRAIN_GATEWAY = CONFIG['runtime']['brain_gateway_url']
 LIFE_STATE = PERSONA_DIR / '\u72b6\u6001' / '\u5f53\u524d\u72b6\u6001.json'
 MEMORY_EVENTS = PERSONA_DIR / '\u8bb0\u5fc6' / '\u4e8b\u4ef6.jsonl'
 OCR = RapidOCR()
+_LAST_CONNECTION_LOG = 0
 
 def env():
     e = os.environ.copy()
@@ -53,22 +57,24 @@ def active_adb_serial():
     e = env()
     r = subprocess.run([str(ADB), 'devices'], env=e, capture_output=True, timeout=15)
     text = r.stdout.decode('utf-8', 'replace')
-    if ADB_WIRELESS in text:
-        return ADB_WIRELESS
-    if ADB_USB in text:
-        return ADB_USB
-    subprocess.run([str(ADB), 'connect', ADB_WIRELESS], env=e, capture_output=True, timeout=15)
-    time.sleep(0.5)
-    r = subprocess.run([str(ADB), 'devices'], env=e, capture_output=True, timeout=15)
-    text = r.stdout.decode('utf-8', 'replace')
-    if ADB_WIRELESS in text:
-        return ADB_WIRELESS
-    return ADB_USB if ADB_USB in text else None
+    selected = select_serial(text, PHONE_CONTROL_MODE, ADB_USB, ADB_WIRELESS, PHONE_WIRELESS_ENABLED)
+    if selected:
+        return selected
+    if PHONE_WIRELESS_ENABLED:
+        subprocess.run([str(ADB), 'connect', ADB_WIRELESS], env=e, capture_output=True, timeout=15)
+        time.sleep(0.5)
+        r = subprocess.run([str(ADB), 'devices'], env=e, capture_output=True, timeout=15)
+        text = r.stdout.decode('utf-8', 'replace')
+        if ADB_WIRELESS in text:
+            return ADB_WIRELESS
+    return None
 
 
 def run_adb(*args, timeout=30):
     serial = active_adb_serial()
-    cmd = [str(ADB)] + (['-s', serial] if serial else []) + list(args)
+    if not serial:
+        raise RuntimeError(f'phone not connected in {PHONE_CONTROL_MODE} mode')
+    cmd = [str(ADB), '-s', serial, *args]
     return subprocess.run(cmd, env=env(), capture_output=True, timeout=timeout)
 
 def adb_text(*args, timeout=30):
@@ -638,10 +644,20 @@ def main():
     if not lock:
         log('another worker already owns the phone; exit')
         return
+    global _LAST_CONNECTION_LOG
     while True:
         if not (RUNTIME/'paused.flag').exists():
-            try: run_once(False)
-            except Exception as e: log('loop error: ' + repr(e))
+            try:
+                run_once(False)
+                _LAST_CONNECTION_LOG = 0
+            except Exception as e:
+                msg = repr(e)
+                if 'phone not connected' in msg:
+                    if time.time() - _LAST_CONNECTION_LOG > 300:
+                        log('phone waiting for USB connection')
+                        _LAST_CONNECTION_LOG = time.time()
+                else:
+                    log('loop error: ' + msg)
         time.sleep(8)
 
 if __name__ == '__main__': main()
