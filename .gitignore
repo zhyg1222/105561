@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.tmp
+.env
+.venv/
+private/
+runtime/
+*.log
+*.zip
