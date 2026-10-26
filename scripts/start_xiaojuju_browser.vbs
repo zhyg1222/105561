@@ -1,0 +1,2 @@
+Set sh = CreateObject("WScript.Shell")
+sh.Run """C:\Program Files\Google\Chrome\Application\chrome.exe"" --user-data-dir=""D:\yige-personal-kb\.runtime\browser-xiaojuju"" --profile-directory=Default --no-first-run --new-window ""file:///D:/yige-personal-kb/xiaojuju/identity/public/index.html""", 1, False

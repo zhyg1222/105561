@@ -6,6 +6,7 @@ sys.path.insert(0, r'D:\yige-personal-kb\xiaojuju\src')
 from xiaojuju_core.state import load_life_state, update_life_state
 from xiaojuju_core.memory import retrieve_memories, append_memory_event
 from xiaojuju_core.contacts import load_wechat_contacts, contact_key
+from xiaojuju_core.config import load_config
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
@@ -28,7 +29,7 @@ IME_ORIGINAL = 'com.iflytek.inputmethod.miui/.FlyIME'
 WECHAT_USER = '999'
 WECHAT_ACTIVITY = 'com.tencent.mm/.ui.LauncherUI'
 PERSONA_CHAT_TITLE = '\u5927\u54e5'
-BRAIN_GATEWAY = 'http://127.0.0.1:12400'
+BRAIN_GATEWAY = CONFIG['runtime']['brain_gateway_url']
 LIFE_STATE = PERSONA_DIR / '\u72b6\u6001' / '\u5f53\u524d\u72b6\u6001.json'
 MEMORY_EVENTS = PERSONA_DIR / '\u8bb0\u5fc6' / '\u4e8b\u4ef6.jsonl'
 OCR = RapidOCR()
@@ -559,7 +560,7 @@ def run_once(prime=False):
     configured = load_wechat_contacts(CONTACTS_CONFIG)
     contacts = [x['name'] for x in configured] or [PERSONA_CHAT_TITLE]
     touched = False
-    for contact in contacts[:5]:
+    for contact in contacts[:MAX_CONTACTS_PER_TICK]:
         try:
             touched = process_contact(contact, prime=prime) or touched
         except Exception as exc:

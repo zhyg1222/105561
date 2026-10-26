@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "identity": {
+    "display_name": "小居居",
+    "ai_label": "AI智能体",
+    "pronouns": "她",
+    "public_profile_file": "身份/公开资料.md",
+    "ai_rules_file": "身份/AI标识规则.md",
+    "public_identity_page": "identity/public/index.html",
+    "core_persona_file": "人格核心.md",
+    "relationship_rules_file": "关系规则.md"
+  },
+  "accounts": {
+    "wechat": {
+      "mode": "separate_identity",
+      "status": "active",
+      "contacts_file": "社交/微信联系人.json"
+    },
+    "douyin": {
+      "mode": "official_open_platform",
+      "status": "pending_authorization",
+      "scopes": []
+    },
+    "browser": {
+      "mode": "isolated_profile",
+      "status": "active"
+    }
+  },
+  "autonomy": {
+    "quiet_hours": ["00:00", "07:30"],
+    "activity_limit_per_day": 4,
+    "activity_gap_minutes": 120,
+    "curiosity_file": "自主生活/兴趣/关注队列.json",
+    "daily_plan_dir": "自主生活/每日计划",
+    "activity_log_dir": "自主生活/活动日志",
+    "activity_output_dir": "自主生活/活动成果",
+    "reflection_dir": "自主生活/反思",
+    "allow_self_goals": true,
+    "allow_follow_up_questions": true
+  },
+  "social": {
+    "wechat_contacts_file": "社交/微信联系人.json",
+    "unknown_contacts": "do_not_reply",
+    "max_contacts_per_tick": 5,
+    "proactive_whitelist_only": true,
+    "group_mode": "mention_only",
+    "default_daily_initiation_limit": 2,
+    "reply_to_enabled_contacts": true
+  },
+  "browser": {
+    "mode": "isolated_profile",
+    "profile_dir": "D:\\yige-personal-kb\\.runtime\\browser-xiaojuju",
+    "public_http": true,
+    "private_network": false,
+    "login": "ask",
+    "download": "ask",
+    "upload": "ask",
+    "persist_history": true,
+    "allowed_schemes": ["https", "http"]
+  },
+  "memory": {
+    "main_contact": "大哥",
+    "per_contact": true,
+    "web_footprint": true,
+    "save_sources": true,
+    "raw_chat_retention": "private_local_only"
+  },
+  "permissions": {
+    "policy_file": "权限策略.yaml",
+    "web_rules_file": "工具/联网规则.md",
+    "auto_allow_public_read": true,
+    "require_approval_for_login": true,
+    "require_approval_for_external_message": true,
+    "require_approval_for_purchase": true
+  },
+  "publishing": {
+    "ai_label_required": true,
+    "auto_publish_own_accounts": false,
+    "require_human_review_for_sensitive": true,
+    "sensitive_categories": ["health", "money", "politics", "private_data", "minors"],
+    "daily_post_limit": 3
+  },
+  "presence": {
+    "always_label_ai": true,
+    "self_initiated_web_activity": true,
+    "external_action_log": "行为日志",
+    "network_footprint_log": "行为日志/联网"
+  },
+  "runtime": {
+    "brain_gateway_url": "http://127.0.0.1:12400",
+    "open_llm_url": "http://127.0.0.1:12393",
+    "timezone": "Asia/Shanghai",
+    "data_root": "D:\\yige-personal-kb\\12_社交代理\\小居居"
+  }
+}

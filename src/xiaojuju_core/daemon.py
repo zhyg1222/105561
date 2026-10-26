@@ -3,6 +3,7 @@ from datetime import datetime, time as dtime
 from pathlib import Path
 from .activity import run_activity
 from .audit import audit_event
+from .config import load_config
 from .daily_plan import ensure_daily_plan
 from .goals import add_goal, next_goal, set_goal_status
 from .curiosity import add_interest, next_interest, mark_interest
@@ -29,22 +30,34 @@ def _activity_rows(path: Path) -> list[dict]:
             continue
     return rows
 
-def tick(paths, now: datetime, runner=None, dry_run: bool = False) -> dict:
+def _clock(value: str) -> dtime:
+    hour, minute = str(value).split(":", 1)
+    return dtime(int(hour), int(minute))
+
+
+def tick(paths, now: datetime, runner=None, dry_run: bool = False, config: dict | None = None) -> dict:
+    cfg = config or load_config()
+    auto = cfg["autonomy"]
+    quiet_start, quiet_end = (_clock(x) for x in auto["quiet_hours"])
+    daily_limit = int(auto["activity_limit_per_day"])
+    min_gap_seconds = int(auto["activity_gap_minutes"]) * 60
     if paths.paused.exists():
         return {"status": "paused"}
-    if QUIET_START <= now.time() < QUIET_END:
+    if quiet_start <= now.time() < quiet_end:
         return {"status": "quiet_hours"}
     ensure_daily_plan(now.strftime("%Y-%m-%d"), paths.daily_plans)
     activity_path = paths.activities / f"{now.strftime('%Y-%m-%d')}.jsonl"
     rows = _activity_rows(activity_path)
     if now.time() >= dtime(22, 0):
         write_daily_reflection(now.strftime("%Y-%m-%d"), activity_path, paths.reflection)
-    if sum(1 for r in rows if r.get("status") == "done") >= DAILY_LIMIT:
+    if sum(1 for r in rows if r.get("status") == "done") >= daily_limit:
         return {"status": "daily_limit"}
     epochs = [float(r.get("epoch", 0)) for r in rows if r.get("epoch")]
-    if epochs and now.timestamp() - max(epochs) < MIN_GAP_SECONDS:
+    if epochs and now.timestamp() - max(epochs) < min_gap_seconds:
         return {"status": "activity_gap"}
     goal = next_goal(paths.goals)
+    if not goal and not auto.get("allow_self_goals", True):
+        return {"status": "no_goal"}
     if not goal:
         interest_path = paths.persona / "\u81ea\u4e3b\u751f\u6d3b" / "\u5174\u8da3" / "\u5173\u6ce8\u961f\u5217.json"
         interest = next_interest(interest_path)
@@ -58,6 +71,8 @@ def tick(paths, now: datetime, runner=None, dry_run: bool = False) -> dict:
             interest_id = ""
         add_goal(title, "self", 10, detail=detail, goals_path=paths.goals, interest_id=interest_id)
         goal = next_goal(paths.goals)
+    if not goal and not auto.get("allow_self_goals", True):
+        return {"status": "no_goal"}
     if not goal:
         return {"status": "no_goal"}
     action = "research" if goal.get("permission") == "internal" else goal.get("permission", "research")
