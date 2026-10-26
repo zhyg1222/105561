@@ -60,6 +60,19 @@ def validate_config(config: dict) -> dict:
         raise ValueError("habits must not force daily reports")
     if habits.get("casual_chat_allowed") is not True:
         raise ValueError("casual chat must be allowed")
+    proactive = habits.get("proactive_chat", {})
+    if proactive.get("enabled"):
+        if proactive.get("style") != "casual" or proactive.get("no_formal_reports") is not True:
+            raise ValueError("proactive chat must be casual and must not become formal reports")
+        hours = proactive.get("allowed_hours", [])
+        if not isinstance(hours, list) or len(hours) != 2 or not all(_valid_time(x) for x in hours):
+            raise ValueError("proactive allowed_hours must contain two HH:MM values")
+        if not 1 <= int(proactive.get("max_per_day", 2)) <= 4:
+            raise ValueError("proactive max_per_day must be 1..4")
+        if int(proactive.get("min_hours_between", 3)) < 1:
+            raise ValueError("proactive min_hours_between must be at least 1")
+        if not str(proactive.get("contact", "")).strip():
+            raise ValueError("proactive contact is required")
     goals = config.get("goals", {})
     if goals.get("money_research_enabled"):
         brief = goals.get("daily_brief", {})

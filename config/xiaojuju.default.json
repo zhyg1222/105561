@@ -164,6 +164,19 @@
     "force_daily_report": false,
     "money_topic_proactivity": "when_relevant",
     "share_knowledge_style": "brief_natural",
-    "self_initiated_contact": "whitelist_only"
+    "self_initiated_contact": "whitelist_only",
+    "proactive_chat": {
+      "enabled": true,
+      "allowed_hours": [
+        "09:00",
+        "22:00"
+      ],
+      "max_per_day": 2,
+      "min_hours_between": 3,
+      "min_minutes_after_user_message": 120,
+      "style": "casual",
+      "no_formal_reports": true,
+      "contact": "大哥"
+    }
   }
 }
