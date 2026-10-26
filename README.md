@@ -29,3 +29,18 @@ D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe -m unittes
 
 - `docs/2026-10-26-自主互联网智能体与直播设计.md`
 - `docs/2026-10-26-自主内核与每日生活实施计划.md`
+## 自主内核运行
+
+```powershell
+# 查看状态
+D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe D:\yige-personal-kb\xiaojuju\run_autonomy.py --status
+
+# 单次 dry-run
+D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe D:\yige-personal-kb\xiaojuju\run_autonomy.py --once --dry-run
+
+# 暂停/恢复
+D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe D:\yige-personal-kb\xiaojuju\run_autonomy.py --pause
+D:\yige-personal-kb\.runtime\wechat-operator\.venv\Scripts\python.exe D:\yige-personal-kb\xiaojuju\run_autonomy.py --resume
+```
+
+Windows 计划任务：`XiaoJuJu-Autonomy`，每 15 分钟执行一次 `--once`。安全限制为每日最多 4 次活动、间隔至少 120 分钟、00:00—07:30 静默。

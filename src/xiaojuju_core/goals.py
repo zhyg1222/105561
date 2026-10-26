@@ -1,4 +1,4 @@
-import time
+import time, uuid
 from pathlib import Path
 from .paths import Paths
 from .storage import atomic_write_json, read_json
@@ -15,7 +15,7 @@ def add_goal(title: str, source: str, priority: int, detail: str = "", permissio
     path = Path(goals_path) if goals_path else PATHS.goals
     data = _load(path)
     goal = {
-        "id": str(time.time_ns()),
+        "id": uuid.uuid4().hex,
         "created_epoch": time.time(),
         "source": source,
         "priority": int(priority),

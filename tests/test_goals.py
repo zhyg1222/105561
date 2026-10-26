@@ -15,3 +15,11 @@ class GoalTests(unittest.TestCase):
             g = add_goal("查资料", "self", 10, goals_path=p)
             set_goal_status(g["id"], "done", "ok", goals_path=p)
             self.assertIsNone(next_goal(p))
+
+class GoalIdTests(unittest.TestCase):
+    def test_ids_are_unique(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "goals.json"
+            a = add_goal("A", "self", 1, goals_path=p)
+            b = add_goal("B", "boss", 1, goals_path=p)
+            self.assertNotEqual(a["id"], b["id"])
