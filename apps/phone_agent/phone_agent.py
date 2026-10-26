@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, base64, json, msvcrt, os, re, shutil, subprocess, sys, time, uuid
+import argparse, base64, hashlib, json, msvcrt, os, re, shutil, subprocess, sys, time, uuid
 from urllib.request import Request, urlopen
 from pathlib import Path
 sys.path.insert(0, r'D:\yige-personal-kb\xiaojuju\src')
@@ -31,9 +31,11 @@ DSH_PROFILE = 'xiaojuju'
 PERSONA_DIR = KB / '12_社交代理' / '小居居'
 IME_ADB = 'com.android.adbkeyboard/.AdbIME'
 IME_ORIGINAL = 'com.iflytek.inputmethod.miui/.FlyIME'
-WECHAT_USER = '999'
-WECHAT_ACTIVITY = 'com.tencent.mm/.ui.LauncherUI'
-PERSONA_CHAT_TITLE = '\u5927\u54e5'
+WECHAT_PROFILE = CONFIG['runtime']['wechat']
+WECHAT_PACKAGE = WECHAT_PROFILE['package']
+WECHAT_USER = str(WECHAT_PROFILE['android_user'])
+WECHAT_ACTIVITY = WECHAT_PROFILE['activity']
+PERSONA_CHAT_TITLE = WECHAT_PROFILE.get('chat_title', '\u5927\u54e5')
 CONTACTS_CONFIG = Path(CONFIG['social']['wechat_contacts_file'])
 MAX_CONTACTS_PER_TICK = int(CONFIG['social'].get('max_contacts_per_tick', 5))
 BRAIN_GATEWAY = CONFIG['runtime']['brain_gateway_url']
@@ -184,7 +186,7 @@ def focus_is_xiaojuju():
     info = adb_text('shell', 'dumpsys', 'window')
     for line in info.splitlines():
         if 'mCurrentFocus=' in line:
-            return f'u{WECHAT_USER} com.tencent.mm/' in line
+            return f'u{WECHAT_USER} {WECHAT_PACKAGE}/' in line
     return False
 
 
@@ -340,9 +342,9 @@ def parse_dsh_json(stdout):
     return clean_reply(final), saw_json
 
 
-def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE):
+def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE, event_id=None):
     event = {
-        'event_id': uuid.uuid4().hex,
+        'event_id': event_id or uuid.uuid4().hex,
         'source': 'wechat',
         'user_id': contact,
         'scope': 'private',
@@ -368,14 +370,14 @@ def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE):
         raise RuntimeError('empty gateway reply')
     except Exception as exc:
         log('brain gateway failed; using DSH fallback: ' + repr(exc))
-        return _brain_dsh(incoming, history, persist_state=persist_state, contact=contact)
+        return _brain_dsh(incoming, history, persist_state=persist_state, contact=contact, event_id=event['event_id'])
 
 
-def _brain_dsh(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE):
+def _brain_dsh(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE, event_id=None):
     h = '\n'.join(f"{x.get('role')}: {x.get('text')}" for x in history[-6:])
     persona = persona_context()
     state = update_life_state(incoming) if persist_state else load_life_state()
-    memories = retrieve_memories(incoming)
+    memories = retrieve_memories(incoming, contact=contact)
     memory_text = '\n'.join(
         f"- [{r.get('time', '')}] \u8001\u5927\uff1a{r.get('user', '')} / \u5c0f\u5c45\u5c45\uff1a{r.get('assistant', '')}"
         for r in memories
@@ -429,6 +431,13 @@ def _brain_dsh(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE
         if not saw_json:
             reply = clean_reply(r.stdout)
         if r.returncode == 0 and reply:
+            try:
+                append_memory_event(
+                    incoming, reply, contact=contact, event_id=event_id or uuid.uuid4().hex,
+                    source='wechat', metadata={'fallback': 'dsh'}
+                )
+            except Exception as exc:
+                log('fallback memory write failed: ' + repr(exc))
             return reply
         log(f'brain attempt {attempt} failed rc={r.returncode} stderr=' + (r.stderr or '')[-800:])
         time.sleep(1)
@@ -538,7 +547,9 @@ def process_contact(contact, prime=False):
         save_state(state, contact)
         log(f'[{contact}] primed last incoming: ' + text)
         return True
-    reply = brain(text, state.get('history', []), contact=contact)
+    event_seed = f"{contact}|{incoming.get('y', '')}|{text}|{time.strftime('%Y-%m-%d')}"
+    event_id = hashlib.sha1(event_seed.encode('utf-8')).hexdigest()
+    reply = brain(text, state.get('history', []), contact=contact, event_id=event_id)
     if not reply:
         log(f'[{contact}] empty brain reply')
         return False
@@ -558,6 +569,7 @@ def process_contact(contact, prime=False):
     state['last_incoming_text'] = text
     state['last_incoming_y'] = incoming['y']
     state['last_sent_at'] = time.time()
+    state['last_brain_event_id'] = event_id
     save_state(state, contact)
     memlog = contact_memory_log(contact)
     memlog.parent.mkdir(parents=True, exist_ok=True)

@@ -108,6 +108,13 @@
       "wireless_enabled": false,
       "usb_serial": "",
       "wireless_serial": ""
+    },
+    "wechat": {
+      "package": "com.tencent.mm",
+      "activity": "com.tencent.mm/.ui.LauncherUI",
+      "android_user": "0",
+      "variant": "primary",
+      "chat_title": "大哥"
     }
   },
   "goals": {

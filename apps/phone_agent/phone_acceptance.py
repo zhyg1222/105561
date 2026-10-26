@@ -34,6 +34,10 @@ def main():
     model=text(serial,'shell','getprop','ro.product.model'); release=text(serial,'shell','getprop','ro.build.version.release')
     sdk_text=text(serial,'shell','getprop','ro.build.version.sdk'); sdk=int(sdk_text) if sdk_text.isdigit() else 0
     packages=text(serial,'shell','pm','list','packages','com.tencent.mm'); wechat='com.tencent.mm' in packages
+    wx=pc.get('wechat',{})
+    wx_user=str(wx.get('android_user','0')); wx_package=wx.get('package','com.tencent.mm')
+    user_packages=text(serial,'shell','pm','list','packages','--user',wx_user,wx_package)
+    wechat_user_listed=wx_package in user_packages
     battery_text=text(serial,'shell','dumpsys','battery'); level=0; powered=False
     m=re.search(r'level:\s*(\d+)',battery_text); level=int(m.group(1)) if m else 0
     powered=bool(re.search(r'AC powered:\s*true|USB powered:\s*true|Wireless powered:\s*true',battery_text,re.I))
@@ -42,7 +46,9 @@ def main():
     m=re.search(r'\s(\d+)\s+\d+%\s+/data',df)
     if m: storage_gb=round(int(m.group(1))/1024/1024,2)
     result=evaluate_phone(connected=True,screenshot_ok=screenshot_ok,ocr_text_count=ocr_count,wechat_installed=wechat,battery_level=level,powered=powered,ram_gb=ram_gb,android_sdk=sdk,storage_gb=storage_gb)
-    result.update({"serial":serial,"model":model,"android":release,"sdk":sdk,"battery":level,"powered":powered,"ram_gb":ram_gb,"storage_gb":storage_gb,"ocr_text_count":ocr_count,"wechat_installed":wechat,"screenshot":str(shot)})
+    if not wechat_user_listed:
+        result["warnings"].append("wechat_package_not_listed_for_configured_user")
+    result.update({"serial":serial,"model":model,"android":release,"sdk":sdk,"battery":level,"powered":powered,"ram_gb":ram_gb,"storage_gb":storage_gb,"ocr_text_count":ocr_count,"wechat_installed":wechat,"wechat_package":wx_package,"wechat_android_user":wx_user,"wechat_variant":wx.get("variant",""),"wechat_user_listed":wechat_user_listed,"screenshot":str(shot)})
     (OUT/f"acceptance-{serial.replace(':','_')}.json").write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding='utf-8')
     print(json.dumps(result,ensure_ascii=False,indent=2)); raise SystemExit(0 if result['passed'] else 1)
 
