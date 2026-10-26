@@ -2,10 +2,27 @@ import json, os, re, subprocess, time
 from datetime import datetime
 from pathlib import Path
 from .paths import Paths
+from .audit import audit_event
 
 PATHS = Paths.production()
 NODE = Path(r"D:\Program Files\nodejs\node.exe")
 DSH_BIN = Path(r"D:\yige-personal-kb\.runtime\dsh-personal\node_modules\@deepseek-ai\dsh\lib\bin.js")
+
+def audit_web_events(stdout: str, audit_path: Path | None = None) -> None:
+    if audit_path is None:
+        audit_path = PATHS.persona / "\u884c\u4e3a\u65e5\u5fd7" / "\u8054\u7f51" / (time.strftime("%Y-%m-%d") + ".jsonl")
+    pending = {}
+    for line in (stdout or "").splitlines():
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        if event.get("type") == "tool_call" and event.get("tool") in {"web_search", "web_fetch"}:
+            pending[event.get("callId", "")] = event.get("tool")
+            audit_event("XiaoJuJu", event.get("tool"), json.dumps(event.get("input"), ensure_ascii=False), "started", audit_path)
+        elif event.get("type") == "tool_result" and event.get("callId") in pending:
+            audit_event("XiaoJuJu", pending.pop(event.get("callId")), "", event.get("status", ""), audit_path)
+
 
 def _safe_title(title: str) -> str:
     value = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9-]+", "-", title).strip("-")[:40]
@@ -49,6 +66,7 @@ def default_runner(prompt: str) -> dict:
                 errors="replace",
                 timeout=180,
             )
+            audit_web_events(result.stdout)
             if result.returncode == 0:
                 parsed = _parse_final(result.stdout)
                 if parsed:
@@ -69,7 +87,7 @@ def _build_prompt(goal: dict, state: dict, now: str) -> str:
 只允许公开网页搜索/读取和内部写作，不得发消息、发帖、登录、上传、花钱或修改账号。
 如果使用了网页信息，必须保留来源 URL。没有查到就如实说明。
 只输出 JSON，不要 Markdown 代码围栏：
-{{"title":"成果标题","markdown":"实际成果正文，包含来源（如有）"}}
+{{"title":"成果标题","markdown":"实际成果正文，包含来源（如有）","follow_up":"下一个你自己真想继续调查的问题"}}
 '''
 
 def run_activity(goal: dict, state: dict, now: str, runner=None, output_dir: Path | None = None) -> dict:
@@ -90,4 +108,5 @@ def run_activity(goal: dict, state: dict, now: str, runner=None, output_dir: Pat
     path = output / name
     header = f'# {title}\n\n> 来源目标：{goal.get("source", "self")} · {goal.get("title", "")}\n> 执行时间：{now}\n\n'
     path.write_text(header + markdown + "\n", encoding="utf-8")
-    return {"status": "done", "title": title, "markdown": markdown, "error": "", "path": str(path)}
+    follow_up = str(result.get("follow_up", "")).strip()
+    return {"status": "done", "title": title, "markdown": markdown, "error": "", "path": str(path), "follow_up": follow_up}

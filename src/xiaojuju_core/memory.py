@@ -1,4 +1,4 @@
-import json, re, time
+import hashlib, json, re, time
 from pathlib import Path
 from .paths import Paths
 from .storage import append_jsonl

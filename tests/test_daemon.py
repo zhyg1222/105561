@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from xiaojuju_core.daemon import tick
 from xiaojuju_core.goals import add_goal
+from xiaojuju_core.curiosity import add_interest
 from xiaojuju_core.paths import Paths
 
 def test_paths(root):
@@ -43,3 +44,25 @@ class DaemonTests(unittest.TestCase):
             reflection = Path(d) / "reflection" / "2026-10-26.md"
             self.assertTrue(reflection.exists())
             self.assertIn("夜间研究", reflection.read_text(encoding="utf-8"))
+    def test_curiosity_queue_drives_self_goal(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = test_paths(Path(d)); p.daily_plans.mkdir(parents=True)
+            queue = p.persona / "自主生活" / "兴趣" / "关注队列.json"
+            item = add_interest("虚拟主播如何自然接弹幕", "想改善直播互动", interests_path=queue)
+            out = tick(p, datetime(2026,10,26,10,0), lambda prompt: {"title":"研究结果","markdown":"完成"})
+            self.assertEqual(out["status"], "done")
+            data = json.loads(p.goals.read_text(encoding="utf-8"))
+            self.assertIn("虚拟主播如何自然接弹幕", data["goals"][0]["title"])
+            interests = json.loads(queue.read_text(encoding="utf-8"))
+            self.assertEqual(interests["interests"][0]["status"], "done")
+    def test_self_research_creates_followup_interest(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = test_paths(Path(d)); p.daily_plans.mkdir(parents=True)
+            queue = p.persona / "自主生活" / "兴趣" / "关注队列.json"
+            add_interest("第一项研究", "起点", interests_path=queue)
+            runner = lambda prompt: {"title":"第一项成果","markdown":"完成","follow_up":"下一项继续研究什么"}
+            out = tick(p, datetime(2026,10,26,10,0), runner)
+            self.assertEqual(out["status"], "done")
+            data = json.loads(queue.read_text(encoding="utf-8"))
+            topics = [x["topic"] for x in data["interests"]]
+            self.assertIn("下一项继续研究什么", topics)

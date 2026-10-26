@@ -11,7 +11,7 @@ def _load(path):
         return {"version": 1, "goals": []}
     return data
 
-def add_goal(title: str, source: str, priority: int, detail: str = "", permission: str = "internal", goals_path: Path | None = None) -> dict:
+def add_goal(title: str, source: str, priority: int, detail: str = "", permission: str = "internal", goals_path: Path | None = None, interest_id: str = "") -> dict:
     path = Path(goals_path) if goals_path else PATHS.goals
     data = _load(path)
     goal = {
@@ -24,6 +24,7 @@ def add_goal(title: str, source: str, priority: int, detail: str = "", permissio
         "status": "queued",
         "permission": permission,
         "result": "",
+        "interest_id": interest_id,
     }
     data["goals"].append(goal)
     atomic_write_json(path, data)

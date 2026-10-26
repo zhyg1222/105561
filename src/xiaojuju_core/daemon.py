@@ -5,6 +5,7 @@ from .activity import run_activity
 from .audit import audit_event
 from .daily_plan import ensure_daily_plan
 from .goals import add_goal, next_goal, set_goal_status
+from .curiosity import add_interest, next_interest, mark_interest
 from .permissions import check_permission
 from .reflection import write_daily_reflection
 from .state import load_life_state
@@ -45,13 +46,17 @@ def tick(paths, now: datetime, runner=None, dry_run: bool = False) -> dict:
         return {"status": "activity_gap"}
     goal = next_goal(paths.goals)
     if not goal:
-        add_goal(
-            "\u81ea\u4e3b\u5b89\u6392\u4e00\u6b21\u6d3b\u52a8",
-            "self",
-            10,
-            detail="\u6839\u636e\u5f53\u524d\u5174\u8da3\u548c\u72b6\u6001\uff0c\u81ea\u4e3b\u9009\u62e9\u4e00\u6b21\u5b89\u5168\u7684\u7814\u7a76\u3001\u5199\u4f5c\u6216\u76f4\u64ad\u51c6\u5907\u6d3b\u52a8\u3002",
-            goals_path=paths.goals,
-        )
+        interest_path = paths.persona / "\u81ea\u4e3b\u751f\u6d3b" / "\u5174\u8da3" / "\u5173\u6ce8\u961f\u5217.json"
+        interest = next_interest(interest_path)
+        if interest:
+            title = "\u7814\u7a76\uff1a" + interest.get("topic", "\u81ea\u4e3b\u4e3b\u9898")
+            detail = interest.get("reason", "")
+            interest_id = interest.get("id", "")
+        else:
+            title = "\u81ea\u4e3b\u5b89\u6392\u4e00\u6b21\u6d3b\u52a8"
+            detail = "\u6839\u636e\u5f53\u524d\u5174\u8da3\u548c\u72b6\u6001\uff0c\u81ea\u4e3b\u9009\u62e9\u4e00\u6b21\u5b89\u5168\u7684\u7814\u7a76\u3001\u5199\u4f5c\u6216\u76f4\u64ad\u51c6\u5907\u6d3b\u52a8\u3002"
+            interest_id = ""
+        add_goal(title, "self", 10, detail=detail, goals_path=paths.goals, interest_id=interest_id)
         goal = next_goal(paths.goals)
     if not goal:
         return {"status": "no_goal"}
@@ -66,8 +71,15 @@ def tick(paths, now: datetime, runner=None, dry_run: bool = False) -> dict:
     result = run_activity(goal, state, now.strftime("%Y-%m-%d %H:%M:%S"), runner, paths.output)
     if result.get("status") == "done":
         set_goal_status(goal["id"], "done", result.get("path", ""), paths.goals)
+        interest_path = paths.persona / "自主生活" / "兴趣" / "关注队列.json"
+        if goal.get("interest_id"):
+            mark_interest(goal["interest_id"], "done", result.get("path", ""), interest_path)
+        if result.get("follow_up"):
+            add_interest(result["follow_up"], "由上次自主研究产生", interests_path=interest_path)
     else:
         set_goal_status(goal["id"], "failed", result.get("error", "failed"), paths.goals)
+        if goal.get("interest_id"):
+            mark_interest(goal["interest_id"], "failed", result.get("error", "failed"), paths.persona / "自主生活" / "兴趣" / "关注队列.json")
     row = {
         "time": now.strftime("%Y-%m-%d %H:%M:%S"),
         "epoch": now.timestamp(),

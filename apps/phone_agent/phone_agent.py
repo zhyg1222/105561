@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, r'D:\yige-personal-kb\xiaojuju\src')
 from xiaojuju_core.state import load_life_state, update_life_state
 from xiaojuju_core.memory import retrieve_memories, append_memory_event
+from xiaojuju_core.contacts import load_wechat_contacts, contact_key
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
@@ -12,6 +13,7 @@ from rapidocr_onnxruntime import RapidOCR
 KB = Path(r'D:\yige-personal-kb')
 RUNTIME = KB / '.runtime' / 'phone-agent'
 STATE = RUNTIME / 'state.json'
+STATE_DIR = RUNTIME / 'contact-states'
 LOG = RUNTIME / 'phone-agent.log'
 MEMORY = KB / '12_社交代理' / '小居居' / '记忆' / '大哥.md'
 ADB = Path(r'D:\yige-personal-kb\.runtime\android-tools\extracted\platform-tools\adb.exe')
@@ -145,12 +147,12 @@ def parse_latest_message(result, image_path, w, h):
     return {'text': text, 'y': cy, 'score': score, 'side': side}
 
 
-def check_header(img, w, h):
+def check_header(img, w, h, title=PERSONA_CHAT_TITLE):
     p = RUNTIME / 'header.png'
     crop(img, (int(w*0.2), int(h*0.03), int(w*0.8), int(h*0.11)), p)
     result, _ = ocr_image(p)
     for box, text, score in result:
-        if PERSONA_CHAT_TITLE in str(text) and score >= 0.55:
+        if title in str(text) and score >= 0.55:
             return True
     return False
 
@@ -180,8 +182,8 @@ def keyboard_shown():
     return 'mInputShown=true' in info
 
 
-def ensure_xiaojuju_chat():
-    """Wake the phone and bring the user-999 WeChat conversation to the front."""
+def ensure_xiaojuju_chat(contact=PERSONA_CHAT_TITLE):
+    """Wake the phone and bring the requested user-999 WeChat conversation to the front."""
     run_adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
     run_adb('shell', 'wm', 'dismiss-keyguard')
     run_adb('shell', 'svc', 'power', 'stayon', 'true')
@@ -194,18 +196,17 @@ def ensure_xiaojuju_chat():
     for _ in range(4):
         shot_path = shot()
         w, h = Image.open(shot_path).size
-        if check_header(shot_path, w, h):
+        if check_header(shot_path, w, h, contact):
             if keyboard_shown():
                 dismiss_keyboard()
                 shot_path = shot()
             return shot_path
 
-        # WeChat exposes no useful UIA tree here, so find the exact chat row by OCR.
         result, _ = ocr_image(shot_path)
         target = None
         for box, text, score in result:
             label = str(text).strip()
-            if score < 0.6 or PERSONA_CHAT_TITLE not in label:
+            if score < 0.6 or contact not in label:
                 continue
             xs = [p[0] for p in box]; ys = [p[1] for p in box]
             cy = (min(ys) + max(ys)) / 2
@@ -222,19 +223,34 @@ def ensure_xiaojuju_chat():
         run_adb('shell', 'am', 'start', '--user', WECHAT_USER, '-n', WECHAT_ACTIVITY)
         time.sleep(0.8)
 
-    log('could not open PERSONA_CHAT_TITLE conversation; skip'.replace('PERSONA_CHAT_TITLE', PERSONA_CHAT_TITLE))
+    log(f'could not open {contact} conversation; skip')
     return None
 
 
-def load_state():
-    if STATE.exists():
-        try: return json.loads(STATE.read_text(encoding='utf-8'))
-        except Exception: pass
+def contact_state_path(contact):
+    if contact == PERSONA_CHAT_TITLE and STATE.exists():
+        return STATE
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    return STATE_DIR / (contact_key(contact) + '.json')
+
+
+def load_state(contact=PERSONA_CHAT_TITLE):
+    path = contact_state_path(contact)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding='utf-8'))
+        except Exception:
+            pass
     return {'history': [], 'last_incoming_text': '', 'last_incoming_y': 0, 'last_sent_at': 0}
 
-def save_state(s):
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE.with_suffix('.tmp'); tmp.write_text(json.dumps(s, ensure_ascii=False, indent=2)+'\n', encoding='utf-8'); tmp.replace(STATE)
+
+def save_state(state, contact=PERSONA_CHAT_TITLE):
+    path = contact_state_path(contact)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    tmp.replace(path)
+
 
 def clean_reply(out):
     lines = []
@@ -312,11 +328,11 @@ def parse_dsh_json(stdout):
     return clean_reply(final), saw_json
 
 
-def brain(incoming, history, persist_state=True):
+def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE):
     event = {
         'event_id': uuid.uuid4().hex,
         'source': 'wechat',
-        'user_id': PERSONA_CHAT_TITLE,
+        'user_id': contact,
         'scope': 'private',
         'text': incoming,
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -340,10 +356,10 @@ def brain(incoming, history, persist_state=True):
         raise RuntimeError('empty gateway reply')
     except Exception as exc:
         log('brain gateway failed; using DSH fallback: ' + repr(exc))
-        return _brain_dsh(incoming, history, persist_state=persist_state)
+        return _brain_dsh(incoming, history, persist_state=persist_state, contact=contact)
 
 
-def _brain_dsh(incoming, history, persist_state=True):
+def _brain_dsh(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE):
     h = '\n'.join(f"{x.get('role')}: {x.get('text')}" for x in history[-6:])
     persona = persona_context()
     state = update_life_state(incoming) if persist_state else load_life_state()
@@ -411,8 +427,8 @@ def restore_ime():
     run_adb('shell', 'ime', 'set', IME_ORIGINAL)
     run_adb('shell', 'ime', 'disable', IME_ADB)
 
-def send_text(text, expected_incoming=None):
-    shot_path = ensure_xiaojuju_chat()
+def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
+    shot_path = ensure_xiaojuju_chat(contact)
     if not shot_path:
         return False
     w, h = Image.open(shot_path).size
@@ -484,53 +500,72 @@ def dismiss_keyboard():
         run_adb('shell', 'input', 'keyevent', '4')
         time.sleep(0.8)
 
-def run_once(prime=False):
-    shot_path = ensure_xiaojuju_chat()
+def contact_memory_log(contact):
+    if contact == PERSONA_CHAT_TITLE:
+        return MEMORY
+    return MEMORY.parent / '\u8bbf\u5ba2' / (contact_key(contact) + '.md')
+
+
+def process_contact(contact, prime=False):
+    shot_path = ensure_xiaojuju_chat(contact)
     if not shot_path:
         return False
-    w, h = Image.open(shot_path).size
     incoming = read_incoming(shot_path)[2]
     if not incoming:
-        log('no incoming text found')
+        log(f'[{contact}] no incoming text found')
         return False
-    state = load_state()
+    state = load_state(contact)
     text = incoming['text']; now = time.time()
     if text == state.get('last_incoming_text') and now - float(state.get('last_sent_at', 0)) < 20:
-        # The latest-message side check is the primary duplicate guard; this is
-        # a short race-condition backstop only.
         return False
     if prime:
         state['last_incoming_text'] = text
         state['last_incoming_y'] = incoming['y']
         state['last_sent_at'] = now
         state.setdefault('history', []).append({'role': 'user', 'text': text, 'at': now})
-        save_state(state)
-        log('primed last incoming: ' + text)
+        save_state(state, contact)
+        log(f'[{contact}] primed last incoming: ' + text)
         return True
-    reply = brain(text, state.get('history', []))
+    reply = brain(text, state.get('history', []), contact=contact)
     if not reply:
-        log('empty brain reply')
+        log(f'[{contact}] empty brain reply')
         return False
     if not focus_is_xiaojuju():
-        log('page changed before send; skip')
+        log(f'[{contact}] page changed before send; skip')
         return False
-    ok = send_text(reply, expected_incoming=text)
+    ok = send_text(reply, expected_incoming=text, contact=contact)
     if not ok:
-        log('send failed')
+        log(f'[{contact}] send failed')
         return False
     state.setdefault('history', [])
-    state['history'] += [{'role':'user','text':text,'at':now},{'role':'assistant','text':reply,'at':time.time()}]
+    state['history'] += [
+        {'role': 'user', 'text': text, 'at': now},
+        {'role': 'assistant', 'text': reply, 'at': time.time()},
+    ]
     state['history'] = state['history'][-20:]
     state['last_incoming_text'] = text
     state['last_incoming_y'] = incoming['y']
     state['last_sent_at'] = time.time()
-    save_state(state)
-    append_memory_event(text, reply)
-    MEMORY.parent.mkdir(parents=True, exist_ok=True)
-    with MEMORY.open('a', encoding='utf-8') as f:
-        f.write(f'\n## {time.strftime("%Y-%m-%d %H:%M")}\n- 老大：{text}\n- 小居居：{reply}\n')
-    log('replied: ' + reply)
+    save_state(state, contact)
+    memlog = contact_memory_log(contact)
+    memlog.parent.mkdir(parents=True, exist_ok=True)
+    with memlog.open('a', encoding='utf-8') as f:
+        f.write(f'\n## {time.strftime("%Y-%m-%d %H:%M")}\n- [{contact}] {text}\n- \u5c0f\u5c45\u5c45\uff1a{reply}\n')
+    log(f'[{contact}] replied: ' + reply)
     return True
+
+
+def run_once(prime=False):
+    configured = load_wechat_contacts(CONTACTS_CONFIG)
+    contacts = [x['name'] for x in configured] or [PERSONA_CHAT_TITLE]
+    touched = False
+    for contact in contacts[:5]:
+        try:
+            touched = process_contact(contact, prime=prime) or touched
+        except Exception as exc:
+            log(f'[{contact}] process error: {exc!r}')
+    return touched
+
 
 def acquire_instance_lock():
     RUNTIME.mkdir(parents=True, exist_ok=True)
