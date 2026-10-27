@@ -84,7 +84,7 @@
 - `scripts/run_agent_phone_worker.py`：新 outbox 到手机发送的 worker，复用 phone_agent 并共享实例锁。
 - `src/xiaojuju_agent/style.py`：统一清理 Markdown、标题、列表和过长输出。
 - `phone_agent` 已支持新 Agent 历史上下文、连续未回复消息、主动消息历史写回；聊天内容裁剪现在按键盘/输入框动态避让。
-- 全仓测试本轮通过：`126 passed`。
+- 全仓测试本轮通过：`138 passed`。
 - 尚未完成：新 outbox worker 的真实发送验收；浏览器 worker；Celery Beat 自主生活/夜间反思；50+ 人格与记忆评估集。
 
 ## 当前真机注意
@@ -94,7 +94,7 @@
 - 手机后台任务和 Agent API 任务都需要健康监控与自动重启。
 ## 工具回路与最新提交
 
-- 最新 main：`fcc42f7 feat: add policy-gated public web fetch`；此前为 `c0e3651 feat: connect langgraph tool loop and recovery`。
+- 最新 main：`1fa36db fix: bind browser approvals to event ids`；此前为 `e39f146 feat: add browser actions and one-time approvals`。
 - `web_search` 已接入 LangGraph：模型可发起工具调用，`WebSearchTool` 经 OPA 只读检查，结果回到同一 checkpoint。
 - 真实 DeepSeek + 公共搜索已验证，返回内容能作为最终回复依据。
 - 失败后残留的 dangling tool_call 会自动补 `ToolMessage`，修复顺序是先修复旧工具结果，再追加新用户消息。
@@ -123,3 +123,12 @@
 - API 端点：`GET /v1/approvals`、`POST /v1/approvals/{id}/approve`、`POST /v1/approvals/{id}/reject`。
 - 运行手册：`docs/runbooks/browser-and-approvals.md`。
 - 当前仍不自动发布社交内容；发布必须先明确批准。
+## 浏览器动作与审批验收（2026-10-27）
+
+- `browser_read` 已真实打开 example.com 并读取渲染后的标题/正文。
+- `browser_action` 会生成 pending 审批，不会在没有批准时执行；真实 API 返回了 approval_id。
+- 审批已真实批准、消费并验证状态从 `approved` 变为 `consumed`；审批记录已正确绑定 event_id。
+- API：`GET /v1/approvals`、`POST /v1/approvals/{id}/approve`、`POST /v1/approvals/{id}/reject`。
+- WSL 现在必须先启动保活；`XiaoJuJu-Agent-Stack` 会启动 WSL/Docker 并保持 `sleep infinity`，否则 Docker 容器会反复重建、端口丢失。
+- 当前最新测试：`138 passed`；OPA 4/4。
+- 仍未实现：社交媒体平台的自动发布、直播自主运营、Graphiti/Neo4j 长期图谱、Celery Beat 自主生活完整接线。
