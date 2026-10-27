@@ -107,3 +107,11 @@
 - 真实 API 已验证：搜索 Open-AutoGLM 后能回答；读取官方 README 后能用一句话总结项目。
 - OPA 版本测试：4/4 passed；OPA 容器已重启加载 `web.fetch` 新策略。
 - 生产 API 任务 `XiaoJuJu-Agent-API` 已重启，端口 `127.0.0.1:12402`，health/ready 均通过。
+## 自动评估与运行稳定性
+
+- 新增 `src/xiaojuju_agent/evaluation.py`、`scripts/run_persona_eval.py` 和 50 条固定场景：`evals/persona_scenarios.jsonl`。
+- 评估会使用 `eval-{run_id}-{scenario_id}` 隔离每次会话，保存 JSONL 明细和 JSON 汇总。
+- 最近完整 50 条：49/50（最后一个失败是评分词表把“这个不行/硬边界”判成缺少边界词，定向修正后该场景 1/1）。
+- `Database.open` 改为可配置的 `db_open_timeout_seconds=45`，适配 Windows + WSL2 冷启动。
+- WSL 必须由 `XiaoJuJu-Agent-Stack`/`sleep infinity` 保活；否则 Docker 容器和端口会反复重建。
+- 运行手册：`docs/runbooks/persona-evaluation.md`。

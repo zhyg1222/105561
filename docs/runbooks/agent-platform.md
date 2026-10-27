@@ -182,3 +182,5 @@ Register-ScheduledTask `
 - 不对 Docker 命名卷执行 `docker compose down -v`。
 
 现有微信真机链路另见：[`wechat-oppo-a96.md`](wechat-oppo-a96.md)。
+
+人格与记忆自动评估见：[`persona-evaluation.md`](persona-evaluation.md)。

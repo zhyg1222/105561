@@ -9,6 +9,7 @@ from .settings import Settings
 
 class Database:
     def __init__(self, settings: Settings):
+        self.open_timeout_seconds = float(settings.db_open_timeout_seconds)
         self.pool = AsyncConnectionPool(
             conninfo=settings.database_url,
             min_size=1,
@@ -19,7 +20,7 @@ class Database:
 
     async def open(self) -> None:
         await self.pool.open()
-        await self.pool.wait(timeout=5)
+        await self.pool.wait(timeout=self.open_timeout_seconds)
 
     async def close(self) -> None:
         await self.pool.close()

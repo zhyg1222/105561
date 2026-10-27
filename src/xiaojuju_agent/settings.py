@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     opa_url: str = "http://127.0.0.1:8181"
     environment: Literal["dev", "test", "prod"] = "dev"
     shadow_mode: bool = True
+    db_open_timeout_seconds: float = 45.0
     deepseek_api_key: SecretStr | None = None
     otel_exporter_otlp_endpoint: str | None = None
     identity_dir: Path = Path("D:/yige-personal-kb/12_\u793e\u4ea4\u4ee3\u7406/\u5c0f\u5c45\u5c45")
