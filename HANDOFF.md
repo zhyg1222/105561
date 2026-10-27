@@ -1,3 +1,24 @@
+# 小居居目标交接（架构接线更新）
+
+> 更新时间：2026-10-27 22:55  
+> 状态：active，未完成。
+
+## 新增完成
+
+- `40d585c`：Open-LLM-VTuber 前端已启动并接到新 Agent API `http://127.0.0.1:12402/v1`，模型 `xiaojuju`；本地页面 `http://127.0.0.1:12393` 返回 200。
+- VTuber 的 OpenAI-compatible LLM 实际调用 Agent API 成功，返回“我是小居居，一个住在你手机里的 AI 智能体，不是真人。”
+- `d610ebd`：Postgres `app_outbox` 与真实手机 worker 接通；新增 claim/ack/retry/fail API，`MessageSendTool` 已注册到新 Agent 工具图。
+- 真实微信 outbox 验收：`bridge-ascii-20261027` 内容 `bridge OK` 已从手机发出并写入 `sent`；日志有 `sent app outbox message`。
+- 健康检查新增 VTuber 端点，当前 API、VTuber、Postgres、Neo4j、Memory worker、Phone agent、ADB、autonomy/proactive 心跳全部 `ok=true`。
+- 当前全量测试：`155 passed`。
+
+## 仍需完成
+
+- 小红书/抖音/视频号真实账号扫码登录尚未完成，社交公开内容仍不能宣称已发布。
+- VTuber 目前是本地表现层接线和文本对话验证；麦克风/扬声器语音、Live2D 实时交互和平台直播弹幕/推流还需要人工设备验收。
+- 真实社交发布需要先扫码，再走 `social.publish` 一次性审批和页面回执核验。
+
+---
 # 小居居目标交接（继续审计更新）
 
 > 更新时间：2026-10-27 22:37  
