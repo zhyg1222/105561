@@ -1,3 +1,28 @@
+# 小居居目标交接（最新接线状态）
+
+> 更新时间：2026-10-27 23:00  
+> 状态：active，未完成。
+
+## 最近提交
+
+- `865ce1e`：Graphiti 结果与旧记忆交错合并；非 owner 消息改为一次性审批。
+- `d610ebd`：Postgres `app_outbox` 接到真实 Phone Agent；新增 claim/ack/retry/fail API 和 `message_send` 工具。
+- `40d585c`：Open-LLM-VTuber 前端接到新 Agent API，健康检查覆盖 VTuber。
+
+## 实测
+
+- API/Postgres/Neo4j/Memory worker/Phone agent/VTuber/ADB/autonomy/proactive 健康检查 `ok=true`。
+- VTuber LLM 经 `http://127.0.0.1:12402/v1` 实际返回 AI 身份介绍。
+- phone outbox `bridge-ascii-20261027` 已真实发送并回写 `sent`。
+- 全量测试：`155 passed`；OPA：`6/6 passed`。
+
+## 未完成
+
+- 小红书、抖音、视频号真实扫码登录与公开发布回执。
+- VTuber 真实麦克风/TTS/Live2D 语音验收和平台直播推流。
+- 目前社交发布仍需一次性审批，不能把 `submitted` 当 `published`。
+
+---
 # 小居居目标交接（架构接线更新）
 
 > 更新时间：2026-10-27 22:55  
