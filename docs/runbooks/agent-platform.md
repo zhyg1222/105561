@@ -1,52 +1,61 @@
 # Agent Platform Operations Runbook
 
-> 闁倻鏁ょ拋鈥冲灊閿涙瓪docs/superpowers/plans/2026-10-26-01-agent-platform-foundation.md`
-> 瑜版挸澧犻梼鑸殿唽閿涙艾濂栫€涙劘绻嶇悰宀嬬礉缁備焦顒涢惇鐔风杽閸欐垿鈧?
+> 适用计划：`docs/superpowers/plans/2026-10-26-01-agent-platform-foundation.md`
+> 当前阶段：影子运行，禁止真实发送
 
-## 1. 閸撳秶鐤嗛弶鈥叉
+## 1. 运行架构
 
-- Windows 瀹告彃鎯庨悽?`Microsoft-Windows-Subsystem-Linux`閵?
-- Windows 瀹告彃鎯庨悽?`VirtualMachinePlatform`閵?
-- 娑撳﹨鍫崝鐔诲厴閸氼垳鏁ら崥搴＄箑妞ゅ鍣搁崥顖欑濞喡扳偓?
-- 闁插秴鎯庨崥搴＄暔鐟?Docker Desktop閿涘苯鑻熺亸?Docker data-root 閸?`XJJ_STACK_DATA` 閹稿洤鎮?D 閻╂ǜ鈧?
-- 閺堫剟銆嶉惄顔诲▏閻?Python 3.12 閸?`uv`閵?
+- Windows WSL2 发行版：`UbuntuAgent`
+- WSL 虚拟磁盘：`D:\yige-personal-kb\.runtime\wsl\UbuntuAgent`
+- Docker Engine：`29.1.3`
+- Docker Compose：`2.40.3`
+- 数据存储：Docker 命名卷，实际位于 D 盘的 WSL 虚拟磁盘
+- 镜像缓存：`docker.m.daocloud.io`
 
-濡偓閺屻儻绱?
+不再依赖 Docker Desktop。WSL 内的 systemd 管理 Docker Engine。
 
-```powershell
-wsl --status
-docker version
-uv --version
-```
-
-## 2. 閸氼垰濮╅崺铏诡攨鐠佺偓鏌?
+## 2. 启动常驻栈
 
 ```powershell
-Copy-Item deploy/compose/.env.example deploy/compose/.env
-docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env up -d
-docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env ps
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start_agent_stack.ps1
 ```
 
-鐟曚焦鐪?Postgres閵嗕箓alkey閵嗕腐eo4j閵嗕副PA 閸忋劑鍎存稉?`healthy`閵?
+该脚本会：
 
-## 3. 闁板秶鐤?Agent
+1. 启动 `UbuntuAgent`。
+2. 启动 Docker Compose 服务。
+3. 保持一个 `sleep infinity` 前台进程，防止 WSL2 空闲自动停止。
+
+检查：
+
+```powershell
+wsl -d UbuntuAgent -u root -- bash -lc "docker ps --format '{{.Names}} {{.Status}}'"
+```
+
+要求：
+
+- `xiaojuju-agent-postgres-1` healthy
+- `xiaojuju-agent-valkey-1` healthy
+- `xiaojuju-agent-neo4j-1` healthy
+- `xiaojuju-agent-opa-1` healthy
+
+## 3. 配置 Agent
 
 ```powershell
 Copy-Item deploy/agent.env.example deploy/agent.env
 ```
 
-婵夘偄鍟撻敍?
+填写：
 
 - `XJJ_DATABASE_URL`
 - `XJJ_VALKEY_URL`
 - `XJJ_OPA_URL`
 - `XJJ_DEEPSEEK_API_KEY`
-- `XJJ_IDENTITY_DIR`
-- 閸欘垶鈧绱癭XJJ_OTEL_EXPORTER_OTLP_ENDPOINT`
+- 可选：`XJJ_OTEL_EXPORTER_OTLP_ENDPOINT`
 
-`deploy/agent.env` 娑撳秴绶辨潻娑樺弳 Git閵?
+`deploy/agent.env` 不得进入 Git。
 
-閸旂姾娴囬悳顖氼暔閿?
+加载环境：
 
 ```powershell
 Get-Content deploy/agent.env | ForEach-Object {
@@ -57,46 +66,46 @@ Get-Content deploy/agent.env | ForEach-Object {
 }
 ```
 
-## 4. 閹笛嗩攽鏉╀胶些
+## 4. 执行迁移
 
 ```powershell
 uv run python scripts/migrate_platform.py
 ```
 
-鏉╀胶些閸欘亜鍨卞鐑樺灗鐞涖儵缍堥獮鍐插酱鐞涱煉绱濇稉宥呭灩闂勩倗骞囬張澶嬫殶閹诡喓鈧?
+迁移只创建或补齐平台表，不删除现有数据。
 
-## 5. 閸氼垰濮?Agent 娑?Worker
+## 5. 启动 Agent 与 Worker
 
-缂佸牏顏?A閿?
+终端 A：
 
 ```powershell
 uv run python scripts/run_agent_api.py --host 127.0.0.1 --port 12400
 ```
 
-缂佸牏顏?B閿?
+终端 B：
 
 ```powershell
 uv run celery -A xiaojuju_agent.queue_app.celery_app worker --pool=solo --loglevel=INFO
 ```
 
-閸嬨儱鎮嶅Λ鈧弻銉窗
+健康检查：
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:12400/healthz
 Invoke-RestMethod http://127.0.0.1:12400/readyz
 ```
 
-鐟曚焦鐪伴敍姝歨ealthz=ok`閿涘畭readyz=ready`閵?
+要求：`healthz=ok`，`readyz=ready`。
 
-## 6. 瑜板崬鐡欓崶鐐存杹
+## 6. 影子回放
 
-閸ョ偞鏂侀崜宥堫唶瑜?outbox閿?
+回放前记录 outbox：
 
 ```powershell
-docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env exec -T postgres psql -U xiaojuju -d xiaojuju -c "select count(*) from app_outbox;"
+wsl -d UbuntuAgent -u root -- bash -lc "docker exec xiaojuju-agent-postgres-1 psql -U xiaojuju -d xiaojuju -c 'select count(*) from app_outbox;'"
 ```
 
-閹笛嗩攽閿?
+执行：
 
 ```powershell
 uv run python scripts/replay_shadow.py `
@@ -104,41 +113,70 @@ uv run python scripts/replay_shadow.py `
   --output D:/yige-personal-kb/.runtime/agent-shadow/result.jsonl
 ```
 
-閸愬秵顐奸弻銉嚄 outbox閿涘本鏆熼柌蹇撶箑妞よ绗夐崣妯糕偓?
+再次查询 outbox，数量必须不变。
 
-## 7. 閺佸懘娈扮拠顓濈疅
+## 7. Registry 网络
 
-- Postgres 娑撳秴褰查悽顭掔窗`/v1/events` 鏉╂柨娲?503閿涙稐绗夐懗钘夊晸閸?SQLite 閹存牗濮ら崨濠冨灇閸旂喆鈧?
-- OPA 娑撳秴褰查悽顭掔窗閹碘偓閺堝澹囨担婊呮暏瀹搞儱鍙?fail-closed閿涙硜eadiness 鏉╂柨娲?503閵?
-- Valkey 娑撳秴褰查悽顭掔窗娴滃娆㈡潻娑樺弳婢惰精瑙?闁插秷鐦捄顖氱窞閿涘瘍orker 娑撳秳鍚夌憗鍛暚閹存劑鈧?
-- Neo4j 娑撳秴褰查悽顭掔窗Plan 1 閺嗗倷绗夋笟婵婄閿涙备lan 2 閹?Graphiti 閸氬骸绻€妞ゅ妯嗛弬顓☆唶韫囧棙顥呯槐銏犺嫙鐠佹澘缍嶉梽宥囬獓閵?
-- DeepSeek 鐡掑懏妞?缁屽搫娲栨径宥忕窗Celery 閺堝妾洪柌宥堢槸閿涙稖绉存潻鍥︾瑐闂勬劕鎮楁禍瀣╂閺嶅洩顔?failed閵?
+Compose 使用 `docker.m.daocloud.io` 拉取已固定的 Docker Hub 镜像。版本标签不变。
 
-## 8. 閸ョ偞绮?
+如果镜像源不可用：
 
-Plan 1 閸欘亜浠涜ぐ鍗炵摍鏉╂劘顢戦妴鍌氭礀濠婃碍顒炴銈忕窗
+1. 先检查 `docker pull docker.m.daocloud.io/library/hello-world:latest`。
+2. 不要改回无代理的 `docker.io` 盲试。
+3. 选择新的可信 registry 后，逐镜像校验 digest，再更新 Compose。
 
-1. 閸嬫粍顒涢弬?Agent API 閸?worker閵?
-2. 娑撳秴鍨归梽銈嗘煀閺佺増宓佹惔鎿勭礉娣囨繄鏆€鐎孤ゎ吀閸滃苯娲栭弨鍓х波閺嬫嚎鈧?
-3. 缂佈呯敾娴ｈ法鏁ら弮?`run_brain_gateway.py` 閸滃瞼骞囬張澶婂絺闁線鎽肩捄顖樷偓?
-4. 閸欘亝婀侀崷銊︽＋闁炬崘鐭炬稊鐔蜂粻濮濄垹鎮楅敍灞惧閸欘垱鏆ｆ担鎾充粻濮?Compose閵?
+## 8. 故障语义
 
-## 9. 閺佺増宓佺€电厧鍤?
+- Postgres 不可用：`/v1/events` 返回 503；不能写 SQLite 或报告成功。
+- OPA 不可用：所有副作用工具 fail-closed；readiness 返回 503。
+- Valkey 不可用：事件进入重试/未发布状态，worker 不伪装完成。
+- Neo4j 不可用：Plan 1 暂不依赖；Plan 2 接 Graphiti 后阻断记忆检索并记录降级。
+- DeepSeek 超时/空回复：Celery 有限重试；超过上限后事件标记 failed。
+- WSL 停止：运行 `scripts/start_agent_stack.ps1`，命名卷数据不会丢失。
 
-Postgres閿?
+## 9. 回滚
+
+Plan 1 只做影子运行。回滚步骤：
+
+1. 停止新 Agent API 和 worker。
+2. 不删除 Docker 命名卷，保留事件、结果和审计。
+3. 继续使用旧 `run_brain_gateway.py` 和现有发送链路。
+4. 最后才执行 `docker compose down`，不要使用 `-v`。
+
+## 10. 数据导出
+
+Postgres：
 
 ```powershell
 New-Item -ItemType Directory -Force D:/yige-personal-kb/.runtime/backups | Out-Null
-docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env exec -T postgres pg_dump -Fc -f /tmp/xiaojuju-agent.dump -U xiaojuju -d xiaojuju
-docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env cp postgres:/tmp/xiaojuju-agent.dump D:/yige-personal-kb/.runtime/backups/xiaojuju-agent.dump
+wsl -d UbuntuAgent -u root -- bash -lc "docker exec xiaojuju-agent-postgres-1 pg_dump -Fc -f /tmp/xiaojuju-agent.dump -U xiaojuju -d xiaojuju"
+wsl -d UbuntuAgent -u root -- bash -lc "docker cp xiaojuju-agent-postgres-1:/tmp/xiaojuju-agent.dump /mnt/d/yige-personal-kb/.runtime/backups/xiaojuju-agent.dump"
 ```
 
-Plan 1 娑撳秵甯?Neo4j 鐠佹澘绻傞弫鐗堝祦閿涘苯娲滃銈嗘拱闂冭埖顔屽▽鈩冩箒 Neo4j 娑撴艾濮熺€电厧鍤妴?
+Plan 1 不接 Neo4j 记忆数据，因此本阶段没有 Neo4j 业务导出。
 
-## 10. 缁備焦顒涙禍瀣€?
+## 11. 开机自启
 
-- 娑撳秳濞囬悽?`latest` 闂€婊冨剼閹存牔绶风挧鏍モ偓?
-- 娑撳秵濡?`deploy/compose/.env`閵嗕梗deploy/agent.env`閵嗕浇浜版径鈺傤劀閺傚洦褰佹禍銈呭煂 Git閵?
-- 娑撳秴婀ぐ鍗炵摍濡€崇础閸氭垹婀＄€圭偛浜曟穱掳鈧胶娲块幘顓溾偓浣圭セ鐟欏牆娅掗幋鏍ㄥ閺堝搫褰傞柅浣碘偓?
-- 娑撳秹鈧俺绻冩穱顔芥暭 Prompt 缂佹洝绻?OPA閵?
-- 娑撳秴婀張顏勭暚閹存劗婀＄€圭偞鏁归崣鎴︾崣閺€鑸垫鐎癸絿袨閹靛婧€闁炬崘鐭鹃崣顖滄暏閵?
+注册 Windows 登录任务：
+
+```powershell
+$action = New-ScheduledTaskAction `
+  -Execute "powershell.exe" `
+  -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\yige-personal-kb\xiaojuju\scripts\start_agent_stack.ps1"'
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask `
+  -TaskName "XiaoJuJu-Agent-Stack" `
+  -Action $action `
+  -Trigger $trigger `
+  -RunLevel Highest `
+  -Force
+```
+
+## 12. 禁止事项
+
+- 不使用 `latest` 镜像或依赖。
+- 不把 `deploy/compose/.env`、`deploy/agent.env`、聊天正文提交到 Git。
+- 不在影子模式向真实微信、直播、浏览器或手机发送。
+- 不通过修改 Prompt 绕过 OPA。
+- 不在未完成真实收发验收时宣称手机链路可用。
+- 不对 Docker 命名卷执行 `docker compose down -v`。

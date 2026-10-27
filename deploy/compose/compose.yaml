@@ -2,7 +2,8 @@ name: xiaojuju-agent
 
 services:
   postgres:
-    image: postgres:17.11-bookworm
+    image: docker.m.daocloud.io/library/postgres:17.11-bookworm
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -10,7 +11,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - "${XJJ_STACK_DATA}/postgres:/var/lib/postgresql/data"
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -18,12 +19,13 @@ services:
       retries: 20
 
   valkey:
-    image: valkey/valkey:9.1.2
+    image: docker.m.daocloud.io/valkey/valkey:9.1.2
+    restart: unless-stopped
     command: ["valkey-server", "--appendonly", "yes", "--requirepass", "${VALKEY_PASSWORD}"]
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - "${XJJ_STACK_DATA}/valkey:/data"
+      - valkey-data:/data
     healthcheck:
       test: ["CMD", "valkey-cli", "-a", "${VALKEY_PASSWORD}", "ping"]
       interval: 5s
@@ -31,15 +33,16 @@ services:
       retries: 20
 
   neo4j:
-    image: neo4j:5.26-community
+    image: docker.m.daocloud.io/library/neo4j:5.26-community
+    restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
     ports:
       - "127.0.0.1:7474:7474"
       - "127.0.0.1:7687:7687"
     volumes:
-      - "${XJJ_STACK_DATA}/neo4j/data:/data"
-      - "${XJJ_STACK_DATA}/neo4j/logs:/logs"
+      - neo4j-data:/data
+      - neo4j-logs:/logs
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1'"]
       interval: 10s
@@ -47,14 +50,25 @@ services:
       retries: 30
 
   opa:
-    image: openpolicyagent/opa:1.21.4
+    image: docker.m.daocloud.io/openpolicyagent/opa:1.21.4
+    restart: unless-stopped
     command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
     ports:
       - "127.0.0.1:8181:8181"
     volumes:
       - "../opa/policies:/policies:ro"
     healthcheck:
-      test: ["CMD", "/opa/opa", "eval", "true"]
+      test: ["CMD", "/opa", "eval", "true"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+volumes:
+  postgres-data:
+    name: xiaojuju-postgres-data
+  valkey-data:
+    name: xiaojuju-valkey-data
+  neo4j-data:
+    name: xiaojuju-neo4j-data
+  neo4j-logs:
+    name: xiaojuju-neo4j-logs
