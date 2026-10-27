@@ -28,6 +28,7 @@ TASKS = (
     "XiaoJuJu-Autonomy",
     "XiaoJuJu-Proactive-Chat",
     "XiaoJuJu-Brain-Gateway",
+    "XiaoJuJu-VTuber",
 )
 
 
@@ -47,10 +48,13 @@ def command(args: list[str], timeout: int = 20) -> tuple[int, str]:
         return 1, repr(exc)
 
 
-def http_check() -> dict[str, Any]:
+def http_check(url: str, *, body: bool = True) -> dict[str, Any]:
     try:
-        response = httpx.get("http://127.0.0.1:12402/readyz", timeout=5)
-        return {"ok": response.status_code == 200, "status": response.status_code, "body": response.text[:1000]}
+        response = httpx.get(url, timeout=5)
+        result = {"ok": response.status_code == 200, "status": response.status_code}
+        if body:
+            result["body"] = response.text[:1000]
+        return result
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": repr(exc)}
 
@@ -180,7 +184,8 @@ def main() -> None:
 
     settings = Settings.from_env()
     checks = {
-        "api": http_check(),
+        "api": http_check("http://127.0.0.1:12402/readyz"),
+        "vtuber": http_check("http://127.0.0.1:12393/", body=False),
         "processes": process_check(),
         "postgres": postgres_check(settings),
         "neo4j": neo4j_check(settings),
