@@ -6,6 +6,7 @@ from contextlib import AsyncExitStack, suppress
 from langchain_deepseek import ChatDeepSeek
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+from .context import reset_current_event_id, set_current_event_id
 from .db import Database
 from .events import EventProcessing, EventStore
 from .graph.conversation import build_conversation_graph
@@ -114,6 +115,7 @@ class AgentRuntime:
         )
         thread_id = f"{'shadow' if shadow else claim['source']}:{contact}"
         memory_provider = getattr(self, "memory_provider", NullMemoryProvider())
+        context_token = set_current_event_id(event_id)
         try:
             memory_rows = await memory_provider.recall(contact, user_text)
             graph_result = await self.graph.ainvoke(
@@ -154,3 +156,5 @@ class AgentRuntime:
         except Exception as exc:
             await self.store.release_claim(event_id, claim["claim_token"], repr(exc))
             raise
+        finally:
+            reset_current_event_id(context_token)

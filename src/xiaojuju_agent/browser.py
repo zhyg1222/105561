@@ -10,6 +10,7 @@ from pathlib import Path
 
 from langchain_core.tools import StructuredTool
 
+from .context import current_event_id
 from .contracts import PolicyInput
 from .tools import ToolExecution, ToolExecutor
 from .web import is_public_url
@@ -170,6 +171,7 @@ class BrowserActionTool:
         approval: str | None = None,
     ) -> ToolExecution:
         actions = validate_actions(actions)
+        event_id = event_id or current_event_id()
         call = PolicyInput(
             actor="xiaojuju",
             source=source,

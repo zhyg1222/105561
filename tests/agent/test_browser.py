@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from xiaojuju_agent.browser import BrowserActionTool, BrowserReadTool
+from xiaojuju_agent.context import reset_current_event_id, set_current_event_id
 from xiaojuju_agent.policy import PolicyClient
 from xiaojuju_agent.tools import ToolExecutor
 
@@ -85,3 +86,27 @@ def test_browser_action_rejects_private_navigation():
         import asyncio
 
         asyncio.run(tool.act([{"action": "navigate", "url": "http://127.0.0.1"}]))
+
+
+@pytest.mark.asyncio
+async def test_browser_action_uses_current_event_context():
+    async def approval_required(request):
+        return httpx.Response(
+            200,
+            request=request,
+            json={"result": {"effect": "require_approval", "reason": "public_publish"}},
+        )
+
+    store = FakeApprovalStore()
+    tool = BrowserActionTool(
+        ToolExecutor(
+            PolicyClient("http://opa", transport=httpx.MockTransport(approval_required)),
+            approval_store=store,
+        )
+    )
+    token = set_current_event_id("event-context")
+    try:
+        await tool.act([{"action": "click", "selector": "#publish"}])
+    finally:
+        reset_current_event_id(token)
+    assert store.created[-1][0] == "event-context"
