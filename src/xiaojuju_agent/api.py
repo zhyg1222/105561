@@ -102,6 +102,7 @@ def create_app(
     approval_store=None,
     memory_queue=None,
     social_publish_tool=None,
+    outbox_store=None,
 ) -> FastAPI:
     app = FastAPI()
     app.state.event_service = event_service
@@ -111,6 +112,7 @@ def create_app(
     app.state.approval_store = approval_store
     app.state.memory_queue = memory_queue
     app.state.social_publish_tool = social_publish_tool
+    app.state.outbox = outbox_store
 
     @app.get("/healthz")
     async def healthz():
@@ -219,6 +221,43 @@ def create_app(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail="social session check failed") from exc
+
+    @app.post("/v1/outbox/claim")
+    async def outbox_claim(request: Request):
+        store = getattr(request.app.state, "outbox", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="outbox unavailable")
+        try:
+            await store.recover_stale()
+            return {"message": await store.claim_next()}
+        except PsycopgError as exc:
+            raise HTTPException(status_code=503, detail="outbox unavailable") from exc
+
+    @app.post("/v1/outbox/{message_id}/ack")
+    async def outbox_ack(message_id: str, request: Request):
+        store = getattr(request.app.state, "outbox", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="outbox unavailable")
+        await store.mark_sent(message_id)
+        return {"message_id": message_id, "status": "sent"}
+
+    @app.post("/v1/outbox/{message_id}/retry")
+    async def outbox_retry(message_id: str, request: Request):
+        store = getattr(request.app.state, "outbox", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="outbox unavailable")
+        payload = await request.json()
+        await store.mark_retry(message_id, str(payload.get("error", "")))
+        return {"message_id": message_id, "status": "queued"}
+
+    @app.post("/v1/outbox/{message_id}/fail")
+    async def outbox_fail(message_id: str, request: Request):
+        store = getattr(request.app.state, "outbox", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="outbox unavailable")
+        payload = await request.json()
+        await store.mark_failed(message_id, str(payload.get("error", "")))
+        return {"message_id": message_id, "status": "failed"}
 
     @app.post("/v1/events")
     async def submit_event(request: Request):

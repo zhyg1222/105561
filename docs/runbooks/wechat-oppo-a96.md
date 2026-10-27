@@ -85,3 +85,22 @@ adb -s <serial> shell pm list packages | Select-String adbkeyboard
 - 中文 `你好，我是小居居。` 成功出现在右侧绿色气泡。
 - 发送后输入框为空，输入法恢复为系统百度输入法。
 - 全仓测试：106 passed。
+
+## App Outbox 桥接（2026-10-27）
+
+新 Agent API 现在可以生成 `app_outbox` 消息，手机 worker 通过内部 HTTP 端点消费：
+
+- `POST /v1/outbox/claim`
+- `POST /v1/outbox/{message_id}/ack`
+- `POST /v1/outbox/{message_id}/retry`
+- `POST /v1/outbox/{message_id}/fail`
+
+phone_agent 优先消费 `app_outbox`，没有消息时回退旧的 `待发送.json`。联系人 `owner` 映射到配置里的微信聊天名。
+
+真实验收：
+
+- 入队 `bridge-ascii-20261027`，文本 `bridge OK`
+- 手机 worker 成功发送并回写 `sent`
+- 日志：`[大哥] sent app outbox message bridge-ascii-20261027`
+
+中文短消息可能因 OCR 对输入框文本检查过严而进入重试；这不是消息桥本身失败。后续应把输入框验证从“完整 OCR 相等”改为键盘/UI 状态与发送后气泡的联合校验。

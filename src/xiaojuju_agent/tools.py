@@ -1,9 +1,12 @@
 import inspect
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from .context import current_event_shadow
+from langchain_core.tools import StructuredTool
+
+from .context import current_event_id, current_event_shadow
 from .contracts import PolicyInput
 from .policy import PolicyClient, PolicyDecision
 
@@ -118,3 +121,31 @@ class MessageSendTool:
             ),
             approval=approval,
         )
+
+
+def as_langchain_message_tool(tool: MessageSendTool) -> StructuredTool:
+    async def _send(text: str, contact_id: str = "owner") -> str:
+        event_id = current_event_id()
+        if not event_id:
+            return json.dumps({"sent": False, "reason": "missing_event_context"}, ensure_ascii=False)
+        execution = await tool.send(
+            source="wechat",
+            contact_id=contact_id,
+            text=text,
+            event_id=event_id,
+            shadow=current_event_shadow(),
+        )
+        return json.dumps(
+            {
+                "executed": execution.executed,
+                "decision": execution.decision.model_dump(),
+                "result": execution.result,
+            },
+            ensure_ascii=False,
+        )
+
+    return StructuredTool.from_function(
+        name="message_send",
+        description="Send a text message to the owner through the real WeChat outbox. Owner only.",
+        coroutine=_send,
+    )

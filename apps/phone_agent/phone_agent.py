@@ -698,9 +698,71 @@ def process_contact(contact, prime=False):
     return True
 
 
+def _agent_outbox(path, payload):
+    if not AGENT_GATEWAY:
+        return None
+    request = Request(
+        AGENT_GATEWAY.rstrip("/") + path,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _process_agent_outbox(allowed_contacts):
+    allowed = set(allowed_contacts)
+    sent = 0
+    for _ in range(2):
+        try:
+            claimed = _agent_outbox("/v1/outbox/claim", {})
+        except Exception as exc:  # noqa: BLE001 - outbox bridge falls back to legacy queue
+            log(f"agent outbox claim failed: {exc!r}")
+            return sent
+        msg = (claimed or {}).get("message")
+        if not msg:
+            break
+        contact = str(msg.get("contact_id", ""))
+        if contact == "owner":
+            contact = PERSONA_CHAT_TITLE
+        if contact not in allowed:
+            try:
+                _agent_outbox(f"/v1/outbox/{msg['message_id']}/fail", {"error": "contact_not_allowed"})
+            except Exception as exc:  # noqa: BLE001 - best-effort close of rejected message
+                log(f"agent outbox unauthorized message could not be closed: {exc!r}")
+            continue
+        try:
+            ok = send_text(msg.get("text", ""), contact=contact)
+        except Exception as exc:  # noqa: BLE001 - send failures must be retried
+            try:
+                _agent_outbox(f"/v1/outbox/{msg['message_id']}/retry", {"error": repr(exc)})
+            except Exception as ack_exc:  # noqa: BLE001 - retry receipt is best effort
+                log(f"agent outbox retry receipt failed: {ack_exc!r}")
+            continue
+        if not ok:
+            try:
+                _agent_outbox(f"/v1/outbox/{msg['message_id']}/retry", {"error": "send failed"})
+            except Exception as exc:  # noqa: BLE001 - retry receipt is best effort
+                log(f"agent outbox retry receipt failed: {exc!r}")
+            continue
+        try:
+            _agent_outbox(f"/v1/outbox/{msg['message_id']}/ack", {})
+        except Exception as exc:  # noqa: BLE001 - ack failure leaves message recoverable
+            log(f"agent outbox acknowledgement failed: {exc!r}")
+        state = load_state(contact)
+        append_history_message(
+            state.setdefault("history", []), "assistant", msg.get("text", ""), time.time()
+        )
+        save_state(state, contact)
+        sent += 1
+        log(f"[{contact}] sent app outbox message {msg['message_id']}")
+    return sent
+
+
 def process_outbox(allowed_contacts):
     allowed=set(allowed_contacts)
-    sent=0
+    sent = _process_agent_outbox(allowed_contacts)
     for msg in pending_messages():
         contact=msg.get("contact", "")
         if contact not in allowed:

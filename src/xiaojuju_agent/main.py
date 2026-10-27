@@ -15,16 +15,31 @@ from .graphiti_memory import GraphitiMemoryProvider
 from .memory import LegacyMemoryProvider
 from .memory_queue import MemoryQueueStore
 from .observability import configure_observability
+from .outbox import OutboxStore
 from .policy import PolicyClient
 from .queue_app import process_event
 from .runtime import AgentRuntime
 from .settings import Settings
 from .social import SauCliProvider, SocialPublishTool, as_langchain_social_tool
-from .tools import ToolExecutor
+from .tools import MessageSendTool, ToolExecutor, as_langchain_message_tool
 from .web import WebFetchTool, WebSearchTool, as_langchain_tools
 
 logger = logging.getLogger(__name__)
 PUBLISH_INTERVAL_SECONDS = 2.0
+
+
+class RuntimeOutbox:
+    def __init__(self, runtime: AgentRuntime):
+        self.runtime = runtime
+
+    async def enqueue(self, contact_id, text, *, kind="message", message_id=None):
+        await self.runtime.ensure_started()
+        return await OutboxStore(self.runtime.db).enqueue(
+            contact_id,
+            text,
+            kind=kind,
+            message_id=message_id,
+        )
 
 
 class RuntimeEventService:
@@ -82,6 +97,9 @@ def create_production_app(
         tools=tools,
         durable_memory_enabled=settings.graphiti_enabled,
     )
+    runtime_outbox = RuntimeOutbox(runtime)
+    message_tool = MessageSendTool(tool_executor, runtime_outbox)
+    tools.append(as_langchain_message_tool(message_tool))
     event_service = RuntimeEventService(runtime)
 
     def dispatch(event_id: str) -> None:
@@ -105,6 +123,7 @@ def create_production_app(
             await runtime.start()
             app.state.approval_store = ApprovalStore(runtime.db)
             app.state.memory_queue = MemoryQueueStore(runtime.db)
+            app.state.outbox = OutboxStore(runtime.db)
             tool_executor.approval_store = app.state.approval_store
         except Exception as exc:
             app.state.startup_error = exc
@@ -134,6 +153,7 @@ def create_production_app(
         approval_store=None,
         memory_queue=None,
         social_publish_tool=social_tool,
+        outbox_store=None,
     )
     app.router.lifespan_context = lifespan
     configure_observability(settings, app=app)
