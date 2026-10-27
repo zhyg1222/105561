@@ -20,9 +20,12 @@ if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"
 
 
 class AgentRuntime:
-    def __init__(self, settings: Settings, memory_provider: MemoryProvider | None = None):
+    def __init__(
+        self, settings: Settings, memory_provider: MemoryProvider | None = None, tools=None
+    ):
         self.settings = settings
         self.memory_provider = memory_provider or NullMemoryProvider()
+        self.tools = tools or []
         self.stack = AsyncExitStack()
         self._start_lock = asyncio.Lock()
         self._started = False
@@ -54,7 +57,7 @@ class AgentRuntime:
                     **model_kwargs,
                 )
                 identity = IdentityBundle.load(self.settings.identity_dir)
-                self.graph = build_conversation_graph(model, saver, identity)
+                self.graph = build_conversation_graph(model, saver, identity, tools=self.tools)
                 self._started = True
             except Exception:
                 await self.stack.aclose()

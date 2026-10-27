@@ -11,6 +11,7 @@ from .queue_app import process_event
 from .runtime import AgentRuntime
 from .settings import Settings
 from .tools import ToolExecutor
+from .web import WebSearchTool, as_langchain_tool
 
 logger = logging.getLogger(__name__)
 PUBLISH_INTERVAL_SECONDS = 2.0
@@ -40,9 +41,14 @@ def create_production_app(
     policy_client: PolicyClient | None = None,
 ):
     settings = settings or Settings.from_env()
-    runtime = runtime or AgentRuntime(settings, memory_provider=LegacyMemoryProvider())
     policy = policy_client or PolicyClient(settings.opa_url)
     tool_executor = ToolExecutor(policy)
+    web_tool = WebSearchTool(tool_executor)
+    runtime = runtime or AgentRuntime(
+        settings,
+        memory_provider=LegacyMemoryProvider(),
+        tools=[as_langchain_tool(web_tool)],
+    )
     event_service = RuntimeEventService(runtime)
 
     def dispatch(event_id: str) -> None:

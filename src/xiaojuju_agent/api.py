@@ -210,6 +210,7 @@ def create_app(
             except EventProcessing as exc:
                 raise HTTPException(status_code=409, detail="event is processing") from exc
             except Exception as exc:
+                logger.exception("chat runtime failed")
                 raise HTTPException(status_code=503, detail="chat runtime unavailable") from exc
         model = payload.get("model", "xiaojuju")
         if payload.get("stream"):

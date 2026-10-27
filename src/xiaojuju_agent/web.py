@@ -5,6 +5,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from langchain_core.tools import StructuredTool
+
 from .contracts import PolicyInput
 from .tools import ToolExecution, ToolExecutor
 
@@ -68,3 +70,17 @@ class WebSearchTool:
             call,
             lambda: self.search_fn(query, max_results),
         )
+
+
+def as_langchain_tool(tool: WebSearchTool) -> StructuredTool:
+    async def _run(query: str, max_results: int = 5) -> str:
+        execution = await tool.search(query, max_results=max_results)
+        if not execution.executed:
+            return f"search denied: {execution.decision.reason}"
+        return str(execution.result)
+
+    return StructuredTool.from_function(
+        name="web_search",
+        description="Search the public web for current public facts. Read-only, never logs in or publishes.",
+        coroutine=_run,
+    )
