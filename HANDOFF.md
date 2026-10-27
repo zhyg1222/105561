@@ -148,3 +148,10 @@
 - 真实 Neo4j 测试：写入后抽取 2 个实体、1 条关系，查询能召回图谱事实。
 - 运行手册：`docs/runbooks/graphiti-memory.md`。
 - 当前 `HashEmbedder` 是字符 n-gram 临时嵌入；后续应接专用中文 embedding 模型提升语义召回。
+## Graphiti 生产验收（2026-10-27 20:35）
+
+- 生产 API 已启用 Graphiti，并修正 `XJJ_DEEPSEEK_API_KEY` 从现有 `DEEPSEEK_API_KEY` 继承，避免图谱写回静默 fallback。
+- 同一联系人实际写入后，Neo4j 查询到 **4 个节点、7 条关系**。
+- 图谱事实示例：`老大告诉小居居，自己喜欢直接、简短的回答，也不喜欢被催。`
+- 聊天回复仍使用后台写回，不等待 DeepSeek 图谱抽取。
+- 最新测试：`144 passed`；Graphiti 真实 add/search 已验证。

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import math
+import os
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
@@ -60,14 +61,19 @@ class NoOpCrossEncoder(CrossEncoderClient):
 
 
 def make_graphiti(settings: Settings) -> Graphiti:
-    if not settings.deepseek_api_key:
+    api_key = (
+        settings.deepseek_api_key.get_secret_value()
+        if settings.deepseek_api_key
+        else os.environ.get("DEEPSEEK_API_KEY", "")
+    )
+    if not api_key:
         raise RuntimeError("DeepSeek API key is required for Graphiti extraction")
     password = settings.neo4j_password
     if password is None:
         raise RuntimeError("Neo4j password is required for Graphiti")
     llm = OpenAIGenericClient(
         config=LLMConfig(
-            api_key=settings.deepseek_api_key.get_secret_value(),
+            api_key=api_key,
             model=settings.deepseek_model,
             base_url=settings.deepseek_base_url,
             temperature=0.1,
