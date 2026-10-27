@@ -157,12 +157,16 @@ class GraphitiMemoryProvider:
                     )
             combined: list[dict[str, Any]] = []
             seen: set[str] = set()
-            for row in [*rows, *legacy_rows]:
-                key = str(row.get("fact") or row.get("user") or "").strip()
-                if not key or key in seen:
-                    continue
-                seen.add(key)
-                combined.append(row)
+            for index in range(max(len(rows), len(legacy_rows))):
+                for source_rows in (rows, legacy_rows):
+                    if index >= len(source_rows):
+                        continue
+                    row = source_rows[index]
+                    key = str(row.get("fact") or row.get("user") or "").strip()
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+                    combined.append(row)
             return combined[: max(limit, len(rows))]
         except Exception as exc:  # noqa: BLE001 - graph failure must fall back to legacy memory
             logger.warning("graphiti recall failed; using legacy memory: %s", exc)

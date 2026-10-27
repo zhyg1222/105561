@@ -19,6 +19,13 @@ decision := {"effect": "allow", "reason": "owner_message"} if {
     input.side_effect == true
 }
 
+decision := {"effect": "require_approval", "reason": "external_message"} if {
+    input.tool == "message.send"
+    input.contact_id != "owner"
+    input.shadow == false
+    input.side_effect == true
+}
+
 decision := {"effect": "require_approval", "reason": "public_publish"} if {
     input.tool in {"browser.publish", "browser.action", "social.publish"}
     input.shadow == false

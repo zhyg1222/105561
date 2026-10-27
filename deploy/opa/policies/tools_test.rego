@@ -51,3 +51,15 @@ test_social_publish_requires_approval if {
     }
     decision.effect == "require_approval"
 }
+
+
+test_external_message_requires_approval if {
+    decision := data.xiaojuju.authz.decision with input as {
+        "tool": "message.send",
+        "contact_id": "friend",
+        "shadow": false,
+        "side_effect": true,
+    }
+    decision.effect == "require_approval"
+    decision.reason == "external_message"
+}
