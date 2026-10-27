@@ -11,6 +11,7 @@ from .browser import (
     as_langchain_browser_tool,
 )
 from .events import EventService
+from .graphiti_memory import GraphitiMemoryProvider
 from .memory import LegacyMemoryProvider
 from .observability import configure_observability
 from .policy import PolicyClient
@@ -54,9 +55,12 @@ def create_production_app(
     web_fetch = WebFetchTool(tool_executor)
     browser_read = BrowserReadTool(tool_executor)
     browser_action = BrowserActionTool(tool_executor)
+    memory_provider = (
+        GraphitiMemoryProvider(settings) if settings.graphiti_enabled else LegacyMemoryProvider()
+    )
     runtime = runtime or AgentRuntime(
         settings,
-        memory_provider=LegacyMemoryProvider(),
+        memory_provider=memory_provider,
         tools=as_langchain_tools(web_search, web_fetch)
         + [as_langchain_browser_tool(browser_read), as_langchain_action_tool(browser_action)],
     )

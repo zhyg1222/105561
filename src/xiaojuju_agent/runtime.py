@@ -76,6 +76,12 @@ class AgentRuntime:
 
     async def stop(self) -> None:
         self._started = False
+        provider = getattr(self, "memory_provider", None)
+        if provider is not None and hasattr(provider, "close"):
+            try:
+                await provider.close()
+            except Exception as exc:  # noqa: BLE001 - provider shutdown is best effort
+                logger.warning("memory provider shutdown failed: %s", exc)
         await self.stack.aclose()
         self.stack = AsyncExitStack()
         if self.db is not None:

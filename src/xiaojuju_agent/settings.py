@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     shadow_mode: bool = True
     db_open_timeout_seconds: float = 45.0
     deepseek_api_key: SecretStr | None = None
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    graphiti_enabled: bool = False
+    neo4j_uri: str = "neo4j://127.0.0.1:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: SecretStr | None = None
     otel_exporter_otlp_endpoint: str | None = None
     identity_dir: Path = Path("D:/yige-personal-kb/12_\u793e\u4ea4\u4ee3\u7406/\u5c0f\u5c45\u5c45")
 

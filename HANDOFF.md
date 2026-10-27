@@ -140,3 +140,11 @@
 - 新增 `run_autonomy.py --force` 作为人工恢复开关。
 - 真实验收：微信/抖音收入目标从 failed 恢复为 done；视力防控门店合规获客目标完成并生成 Markdown 成果。
 - 最新自主活动日志已写入 `自主生活\活动日志\2026-10-27.jsonl`。
+## Graphiti 长期记忆接线
+
+- 新增 `src/xiaojuju_agent/graphiti_memory.py`，Graphiti 0.31.2 + Neo4j 5.26 已实际验证。
+- 旧 SQLite/JSONL 同步写，Graphiti 图谱 episode 后台异步写，失败自动回退。
+- 召回 8 秒超时；联系人 group_id 用 `contact_<hash>` 隔离。
+- 真实 Neo4j 测试：写入后抽取 2 个实体、1 条关系，查询能召回图谱事实。
+- 运行手册：`docs/runbooks/graphiti-memory.md`。
+- 当前 `HashEmbedder` 是字符 n-gram 临时嵌入；后续应接专用中文 embedding 模型提升语义召回。
