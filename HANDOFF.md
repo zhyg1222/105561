@@ -1,3 +1,48 @@
+# 小居居目标交接（最新）
+
+> 更新时间：2026-10-27  
+> 目标状态：active，预算 100,000,000 token，未完成，不要标记 complete。
+
+## 最新提交
+
+- `8a19203`：Graphiti 持久化写入队列、独立 worker、迁移、真实 Neo4j 验收。
+- `12afe95`：社交发布审批层、AI 身份标注、`social-auto-upload` 适配、页面回执验证。
+
+## 当前已完成
+
+- 事件结果与 `app_memory_candidates` 同一 PostgreSQL 事务提交。
+- `XiaoJuJu-Memory-Worker` 独立消费 Graphiti，支持 `FOR UPDATE SKIP LOCKED`、租约、指数退避、失败状态和业务键幂等。
+- 真实验收：`queue-smoke-20261027-1` 最终 `done`；重复回放后 Neo4j 同名 episode 仍为 1。
+- 记忆召回已修复：Graphiti 结果不再丢弃旧 SQLite/JSONL 结果，二者合并去重。
+- 全量测试：151 passed；OPA：5/5 passed。
+- 社交发布：`social.publish` 必须经 OPA 一次性批准；影子事件拒绝；媒体限制在配置目录；正文自动加 `【AI智能体·小居居】`。
+- 已接入 `dreammis/social-auto-upload`（MIT，约 15.8k stars）到 `D:\yige-personal-kb\.runtime\social-auto-upload`，使用系统 Chrome，避免重复维护平台 selector。
+- 新增 `scripts/bootstrap_social_upload.py`、`scripts/start_social_login.py`、`scripts/verify_social_post.py`。
+
+## 当前运行状态
+
+- Agent API：`http://127.0.0.1:12402`，`/readyz` ready。
+- Memory worker：登录任务 `XiaoJuJu-Memory-Worker`，当前有 Python 进程在运行。
+- OPA 已重启并加载 `social.publish` 规则。
+- 小红书登录流程当前可能已过期；需要重新启动扫码。
+- 平台 cookie 还没有有效登录态：`xiaohongshu`、`douyin`、`tencent` 的 `check` 均未完成真实登录。
+
+## 真实发布下一步
+
+1. 打开最新小红书二维码：`D:\yige-personal-kb\.runtime\social-auto-upload\cookies\xiaohongshu_xiaojuju_xhs_login_qrcode_*.png`
+2. 用小红书 APP 扫码；成功后检查 `GET /v1/social/session?platform=xiaohongshu&account=xiaojuju`。
+3. 准备一条明确 AI 身份的草稿，使用 `/v1/social/publish` 创建 pending approval。
+4. 用户明确批准后再次提交同一 payload，检查回执和页面截图。
+5. 再依次完成抖音、视频号登录。
+
+## 风险
+
+- 平台 selector 会随网页版本变化；回执未页面验证时只能标记 `submitted`，不能宣称 `published`。
+- 外部 `social-auto-upload` 运行时不在 Git 仓库；升级后需重新执行 bootstrap 兼容补丁。
+- 不提交 cookie、二维码、聊天正文、API key。
+- `vendor/open-llm-vtuber` 的既有 submodule 提示不要提交。
+
+---
 # 小居居总目标交接（HANDOFF）
 
 > 生成时间：2026-10-27  
