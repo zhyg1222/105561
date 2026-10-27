@@ -14,6 +14,7 @@ from psycopg_pool import PoolClosed, PoolTimeout
 
 from .contracts import IncomingEvent
 from .events import EventProcessing
+from .social import SocialPublishRequest
 
 logger = logging.getLogger(__name__)
 VALID_EVENT_SOURCES = {"wechat", "live", "autonomy", "phone", "browser", "shadow"}
@@ -100,6 +101,7 @@ def create_app(
     tool_executor=None,
     approval_store=None,
     memory_queue=None,
+    social_publish_tool=None,
 ) -> FastAPI:
     app = FastAPI()
     app.state.event_service = event_service
@@ -108,6 +110,7 @@ def create_app(
     app.state.tool_executor = tool_executor
     app.state.approval_store = approval_store
     app.state.memory_queue = memory_queue
+    app.state.social_publish_tool = social_publish_tool
 
     @app.get("/healthz")
     async def healthz():
@@ -151,6 +154,71 @@ def create_app(
             return await queue.stats()
         except PsycopgError as exc:
             raise HTTPException(status_code=503, detail="memory queue unavailable") from exc
+
+    @app.post("/v1/social/publish")
+    async def social_publish(request: Request):
+        tool = getattr(request.app.state, "social_publish_tool", None)
+        if tool is None:
+            raise HTTPException(status_code=503, detail="social publishing is not configured")
+        try:
+            body = await request.json()
+            publish_request = SocialPublishRequest.model_validate(body)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="invalid publish request") from exc
+        event_id = (
+            publish_request.event_id
+            or request.headers.get("Idempotency-Key")
+            or uuid.uuid4().hex
+        )
+        try:
+            await request.app.state.event_service.accept(
+                IncomingEvent(
+                    event_id=str(event_id),
+                    source="browser",
+                    kind="tool_result",
+                    contact_id="owner",
+                    payload={"tool": "social.publish"},
+                    trace_id=str(event_id),
+                    shadow=bool(force_shadow or publish_request.shadow),
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="event store unavailable") from exc
+        try:
+            execution = await tool.publish(
+                publish_request,
+                source="browser",
+                event_id=event_id,
+                approval=publish_request.approval,
+                shadow=force_shadow or publish_request.shadow,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        payload = {
+            "event_id": event_id,
+            "executed": execution.executed,
+            "decision": execution.decision.model_dump(),
+            "result": execution.result,
+        }
+        if execution.executed:
+            return payload
+        if execution.decision.effect == "require_approval":
+            return JSONResponse(payload, status_code=202)
+        raise HTTPException(status_code=403, detail=payload)
+
+    @app.get("/v1/social/session")
+    async def social_session(request: Request):
+        tool = getattr(request.app.state, "social_publish_tool", None)
+        if tool is None:
+            raise HTTPException(status_code=503, detail="social publishing is not configured")
+        platform = request.query_params.get("platform", "")
+        account = request.query_params.get("account", "")
+        try:
+            return await tool.check_session(platform, account)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="social session check failed") from exc
 
     @app.post("/v1/events")
     async def submit_event(request: Request):

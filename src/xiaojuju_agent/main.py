@@ -19,6 +19,7 @@ from .policy import PolicyClient
 from .queue_app import process_event
 from .runtime import AgentRuntime
 from .settings import Settings
+from .social import SauCliProvider, SocialPublishTool, as_langchain_social_tool
 from .tools import ToolExecutor
 from .web import WebFetchTool, WebSearchTool, as_langchain_tools
 
@@ -59,11 +60,26 @@ def create_production_app(
     memory_provider = (
         GraphitiMemoryProvider(settings) if settings.graphiti_enabled else LegacyMemoryProvider()
     )
+    social_tool = (
+        SocialPublishTool(
+            tool_executor,
+            SauCliProvider(settings),
+            media_root=settings.social_publish_media_root,
+            identity_label=settings.social_identity_label,
+        )
+        if settings.social_publish_enabled
+        else None
+    )
+    tools = as_langchain_tools(web_search, web_fetch) + [
+        as_langchain_browser_tool(browser_read),
+        as_langchain_action_tool(browser_action),
+    ]
+    if social_tool is not None:
+        tools.append(as_langchain_social_tool(social_tool))
     runtime = runtime or AgentRuntime(
         settings,
         memory_provider=memory_provider,
-        tools=as_langchain_tools(web_search, web_fetch)
-        + [as_langchain_browser_tool(browser_read), as_langchain_action_tool(browser_action)],
+        tools=tools,
         durable_memory_enabled=settings.graphiti_enabled,
     )
     event_service = RuntimeEventService(runtime)
@@ -117,6 +133,7 @@ def create_production_app(
         tool_executor=tool_executor,
         approval_store=None,
         memory_queue=None,
+        social_publish_tool=social_tool,
     )
     app.router.lifespan_context = lifespan
     configure_observability(settings, app=app)

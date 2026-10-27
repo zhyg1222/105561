@@ -4,6 +4,7 @@ env("PYTHONPATH") = "D:\yige-personal-kb\xiaojuju\src"
 env("XJJ_SHADOW_MODE") = "false"
 env("XJJ_DEEPSEEK_API_KEY") = sh.ExpandEnvironmentStrings("%DEEPSEEK_API_KEY%")
 env("XJJ_GRAPHITI_ENABLED") = "true"
+env("XJJ_SOCIAL_PUBLISH_ENABLED") = "true"
 env("XJJ_NEO4J_URI") = "neo4j://127.0.0.1:7687"
 env("XJJ_NEO4J_USER") = "neo4j"
 env("XJJ_NEO4J_PASSWORD") = "xjj-dev-neo4j"

@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     neo4j_password: SecretStr | None = None
     otel_exporter_otlp_endpoint: str | None = None
     identity_dir: Path = Path("D:/yige-personal-kb/12_\u793e\u4ea4\u4ee3\u7406/\u5c0f\u5c45\u5c45")
+    social_publish_enabled: bool = False
+    social_publish_home: Path = Path("D:/yige-personal-kb/.runtime/social-auto-upload")
+    social_publish_media_root: Path = Path("D:/yige-personal-kb/12_\u793e\u4ea4\u4ee3\u7406/\u5c0f\u5c45\u5c45/\u7d20\u6750")
+    social_publish_receipts_dir: Path = Path("D:/yige-personal-kb/.runtime/social-publish/receipts")
+    social_publish_timeout_seconds: float = 900.0
+    social_identity_label: str = "\u3010AI\u667a\u80fd\u4f53\u00b7\u5c0f\u5c45\u5c45\u3011"
 
     @classmethod
     def from_env(cls) -> "Settings":

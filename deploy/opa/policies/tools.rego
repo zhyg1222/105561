@@ -20,7 +20,7 @@ decision := {"effect": "allow", "reason": "owner_message"} if {
 }
 
 decision := {"effect": "require_approval", "reason": "public_publish"} if {
-    input.tool in {"browser.publish", "browser.action"}
+    input.tool in {"browser.publish", "browser.action", "social.publish"}
     input.shadow == false
     input.side_effect == true
 }

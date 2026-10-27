@@ -69,6 +69,7 @@ async def test_graphiti_provider_writes_and_recalls_with_contact_isolation():
 
     rows = await provider.recall("老大", "喜欢什么表达")
     assert rows[0]["fact"] == "graphiti fact"
+    assert any(row.get("user") == "legacy fact" for row in rows)
     assert graph.searches[0][1] == ["contact_" + contact_key("老大")]
 
     result = await provider.remember(

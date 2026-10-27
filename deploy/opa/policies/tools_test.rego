@@ -40,3 +40,14 @@ test_public_publish_requires_approval if {
     }
     decision.effect == "require_approval"
 }
+
+
+test_social_publish_requires_approval if {
+    decision := data.xiaojuju.authz.decision with input as {
+        "tool": "social.publish",
+        "contact_id": "owner",
+        "shadow": false,
+        "side_effect": true,
+    }
+    decision.effect == "require_approval"
+}

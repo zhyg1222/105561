@@ -155,7 +155,15 @@ class GraphitiMemoryProvider:
                             "source": "graphiti",
                         }
                     )
-            return rows or legacy_rows
+            combined: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for row in [*rows, *legacy_rows]:
+                key = str(row.get("fact") or row.get("user") or "").strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                combined.append(row)
+            return combined[: max(limit, len(rows))]
         except Exception as exc:  # noqa: BLE001 - graph failure must fall back to legacy memory
             logger.warning("graphiti recall failed; using legacy memory: %s", exc)
             return legacy_rows

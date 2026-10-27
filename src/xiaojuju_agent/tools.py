@@ -3,6 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .context import current_event_shadow
 from .contracts import PolicyInput
 from .policy import PolicyClient, PolicyDecision
 
@@ -89,10 +90,12 @@ class MessageSendTool:
         contact_id: str,
         text: str,
         event_id: str,
-        shadow: bool = False,
+        shadow: bool | None = None,
         approval: str | None = None,
         kind: str = "message",
     ) -> ToolExecution:
+        if shadow is None:
+            shadow = current_event_shadow()
         call = PolicyInput(
             actor="xiaojuju",
             source=source,
