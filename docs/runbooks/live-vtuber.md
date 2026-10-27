@@ -37,3 +37,11 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*run_server
 - 当前只验证了 VTuber 前端服务启动和 Agent API 配置接线；真实麦克风、TTS、Live2D 语音互动仍需人工验收。
 - 语音输出必须继承 AI 身份，不冒充真人。
 - 真实直播推流、平台弹幕接入、AI 标识、人工停止开关尚未完成。
+## 启动包装器
+
+`scripts/start_vtuber.vbs` 现在调用 `scripts/run_vtuber.py`，启动前会强制检查 `base_url`，并把 stdout/stderr 写到：
+
+- `D:\yige-personal-kb\.runtime\vtuber\server.out.log`
+- `D:\yige-personal-kb\.runtime\vtuber\server.err.log`
+
+这样 vendor 配置被升级脚本覆盖时也不会静默接回旧 Gateway。
