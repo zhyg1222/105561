@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 RUNTIME = Path("D:/yige-personal-kb/.runtime/health")
 ADB = Path("D:/yige-personal-kb/.runtime/android-tools/extracted/platform-tools/adb.exe")
 PHONE_LOG = Path("D:/yige-personal-kb/.runtime/phone-agent/phone-agent.log")
+AUTONOMY_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/autonomy/last_run.json")
+PROACTIVE_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/proactive/last_run.json")
 TASKS = (
     "XiaoJuJu-Agent-Stack",
     "XiaoJuJu-Agent-API",
@@ -130,6 +132,13 @@ def phone_check() -> dict[str, Any]:
     return {"ok": connected and log_age is not None and log_age < 900, "adb": text[-1000:], "log_age_seconds": log_age}
 
 
+def heartbeat_check(path: Path, max_age_seconds: int) -> dict[str, Any]:
+    if not path.is_file():
+        return {"ok": False, "path": str(path), "reason": "missing"}
+    age = round(time.time() - path.stat().st_mtime, 1)
+    return {"ok": age <= max_age_seconds, "path": str(path), "age_seconds": age, "max_age_seconds": max_age_seconds}
+
+
 def repair(tasks: list[str]) -> None:
     cooldown = RUNTIME / "last_repair.txt"
     now = time.time()
@@ -177,6 +186,8 @@ def main() -> None:
         "neo4j": neo4j_check(settings),
         "docker": docker_check(),
         "phone": phone_check(),
+        "autonomy": heartbeat_check(AUTONOMY_HEARTBEAT, 1800),
+        "proactive": heartbeat_check(PROACTIVE_HEARTBEAT, 7200),
     }
     report = {
         "generated_at": datetime.now(UTC).isoformat(),

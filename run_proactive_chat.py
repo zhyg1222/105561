@@ -1,16 +1,30 @@
-import argparse, json, sys, time
+import argparse
+import json
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-from xiaojuju_core.config import load_config
-from xiaojuju_core.paths import Paths
-from xiaojuju_core.proactive import can_send, parse_proactive, build_proactive_prompt
-from xiaojuju_core.outbox import enqueue_message, pending_messages
 from xiaojuju_core.brain import _default_model
+from xiaojuju_core.config import load_config
 from xiaojuju_core.event_bus import EventBus
 from xiaojuju_core.memory_db import MemoryStore
+from xiaojuju_core.outbox import enqueue_message, pending_messages
+from xiaojuju_core.paths import Paths
+from xiaojuju_core.proactive import build_proactive_prompt, can_send, parse_proactive
 from xiaojuju_core.storage import atomic_write_json, read_json
+
+RUN_LOG = Path(r"D:\yige-personal-kb\.runtime\proactive")
+
+
+def record_run(result: dict) -> None:
+    RUN_LOG.mkdir(parents=True, exist_ok=True)
+    payload = {"generated_at": datetime.now().astimezone().isoformat(), "result": result}
+    (RUN_LOG / "last_run.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    with (RUN_LOG / "runs.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 def _check(paths, pc, dry_run, event_id):
     state_path=paths.persona/"\u793e\u4ea4"/"\u4e3b\u52a8\u804a\u5929\u72b6\u6001.json"
@@ -34,7 +48,8 @@ def _check(paths, pc, dry_run, event_id):
     if activity_path.exists():
         for line in activity_path.read_text(encoding="utf-8").splitlines()[-5:]:
             try: activities.append(json.loads(line).get("goal",""))
-            except Exception: pass
+            except Exception:  # noqa: BLE001, S110 - skip malformed activity rows
+                pass
     constitution=(paths.persona/"\u4eba\u683c\u5baa\u6cd5.md").read_text(encoding="utf-8")
     live=(Path(__file__).resolve().parent/"prompts"/"live_persona.md").read_text(encoding="utf-8")
     context={"now":datetime.now().strftime("%Y-%m-%d %H:%M"),"state":read_json(paths.state,{}),"recent_chat":recent,"interests":interests,"today_activities":activities}
@@ -60,17 +75,23 @@ def main():
         bus.enqueue(event_id,"proactive_chat",{"hour":hour,"dry_run":args.dry_run},priority=30)
         existing=bus.get(event_id)
         if existing and existing.get("status")=="completed":
-            print(json.dumps({"status":"skipped","reason":"already_checked","event_id":event_id},ensure_ascii=False)); return
+            result={"status":"skipped","reason":"already_checked","event_id":event_id}
+            record_run(result)
+            print(json.dumps(result,ensure_ascii=False)); return
         claimed=bus.claim(event_id)
         if claimed is None:
-            print(json.dumps({"status":"skipped","reason":"event_busy","event_id":event_id},ensure_ascii=False)); return
+            result={"status":"skipped","reason":"event_busy","event_id":event_id}
+            record_run(result)
+            print(json.dumps(result,ensure_ascii=False)); return
         try:
             result=_check(paths,pc,args.dry_run,event_id)
         except Exception as exc:
             bus.fail(event_id,repr(exc),retry=True)
+            record_run({"status":"failed","error":repr(exc),"event_id":event_id})
             raise
         result["event_id"]=event_id
         bus.complete(event_id,result)
+    record_run(result)
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=="__main__": main()

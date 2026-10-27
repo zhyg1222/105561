@@ -43,3 +43,18 @@ D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe run_autonomy.py --once --f
 - 自主审计：`D:\yige-personal-kb\12_社交代理\小居居\行为日志\自主内核.jsonl`
 - 已实际恢复：`研究：微信和抖音内容如何转化为收入`
 - 已实际完成：`研究：视力防控门店如何合规获取客户`
+## 心跳与健康（2026-10-27）
+
+`XiaoJuJu-Autonomy` 每 15 分钟执行一次 `run_autonomy.py --once`，`XiaoJuJu-Proactive-Chat` 每小时执行一次。单次 Python 进程不会常驻，因此健康检查读取心跳文件：
+
+- `D:\yige-personal-kb\.runtime\autonomy\last_run.json`
+- `D:\yige-personal-kb\.runtime\proactive\last_run.json`
+
+`scripts\health_check.py` 将 30 分钟内的 autonomy 心跳、2 小时内的 proactive 心跳视为健康；缺失或过期会触发任务重启和 owner 告警 outbox。
+
+手动查看：
+
+```powershell
+Get-Content D:\yige-personal-kb\.runtime\autonomy\last_run.json
+Get-Content D:\yige-personal-kb\.runtime\proactive\last_run.json
+```
