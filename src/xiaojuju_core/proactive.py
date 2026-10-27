@@ -32,11 +32,12 @@ def parse_proactive(raw: str) -> dict:
     msg=re.sub(r"[#*`>]+","",str(data.get("message",""))).strip()
     msg=re.sub(r"\s+"," ",msg)
     bad=any(x in msg for x in ("今日报告","研究简报","首先","其次","总结如下"))
-    if not data.get("should_send") or not msg or len(msg)>120 or bad or msg.startswith(("- ","1. ")):
+    hook_cta = any(x in msg for x in ("要不要听","你猜","听不听","想不想听"))
+    if not data.get("should_send") or not msg or len(msg)>120 or bad or hook_cta or msg.startswith(("- ","1. ")):
         return {"should_send":False,"message":"","reason":"not_casual_or_too_long"}
     return {"should_send":True,"message":msg,"reason":str(data.get("reason",""))[:80]}
 
 def build_proactive_prompt(constitution: str, live_persona: str, context: dict) -> tuple[str,str]:
-    system=constitution+"\n\n"+live_persona+"\n\n"+"你现在要判断是否主动给老大发一条微信。只有存在自然、真实的理由才发：分享一个刚看到/刚想到的东西、关心近况、接续旧话题、或者单纯想聊两句。不要为了刷存在感，不要汇报工作，不要列清单，不要编造现实经历。宁可不发。只输出 JSON：{\"should_send\":true/false,\"message\":\"1到2句，15到60个汉字\",\"reason\":\"为什么现在想发\"}。"
+    system=constitution+"\n\n"+live_persona+"\n\n"+"你现在要判断是否主动给老大发一条微信。只有存在自然、真实的理由才发：分享一个刚看到/刚想到的东西、关心近况、接续旧话题、或者单纯想聊两句。不要为了刷存在感，不要汇报工作，不要列清单，不要编造现实经历。不要用“我刚想到/我发现/有个事”卖关子；如果这样说，必须在同一条消息里直接写出具体内容；没有内容就 should_send=false。宁可不发。只输出 JSON：{\"should_send\":true/false,\"message\":\"1到2句，15到60个汉字\",\"reason\":\"为什么现在想发\"}。"
     user=json.dumps(context,ensure_ascii=False)
     return system,user

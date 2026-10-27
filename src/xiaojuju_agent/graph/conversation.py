@@ -13,8 +13,15 @@ def build_conversation_graph(model, checkpointer, identity):
         return {"messages": [HumanMessage(content=state["user_text"])]}
 
     async def respond(state: ConversationState) -> dict:
+        memory_context = str(state.get("memory_context", "")).strip()
+        history_context = str(state.get("history_context", "")).strip()
+        system_content = identity.content
+        if memory_context:
+            system_content += "\n\n" + memory_context
+        if history_context:
+            system_content += "\n\n??????????????????????\n" + history_context
         prompt_messages = [
-            SystemMessage(content=identity.content),
+            SystemMessage(content=system_content),
             *state["messages"],
         ]
         result = await model.ainvoke(prompt_messages)

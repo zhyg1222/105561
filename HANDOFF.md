@@ -1,0 +1,94 @@
+# 小居居总目标交接（HANDOFF）
+
+> 生成时间：2026-10-27  
+> 目标线程：独立人格、长期记忆、自主生活、自然社交，可操作网络和手机，但明确标注 AI 身份。
+
+## 当前目标
+
+构建并验收一个具备稳定人格、长期记忆、自主生活、自然社交表达、可自主上网和操作手机/微信的智能体。它应当在体验上接近真人，但不冒充真人；所有对外社交身份都要标注 AI。预算：100,000,000 token。
+
+## 已完成
+
+- Plan 1 Agent 平台已合并并推送：Postgres、Valkey、Neo4j、OPA、Celery、LangGraph，四个 Compose 服务 healthy。
+- OPPO A96 / Android 12 真机 ADB 链路已打通。
+- ColorOS 开发者选项 `禁止权限监控` 已打开。
+- ADBKeyboard 已安装并启用；首次安装需要保留 OPPO 系统确认页并点击继续安装。
+- 微信发送链路已验证：
+  - `xjj-test` 真实发送成功；
+  - `你好，我是小居居。` 真实中文发送成功；
+  - 发送后输入框清空，百度输入法恢复；
+  - 发送函数返回 True 且有截图证据。
+- `apps/phone_agent/phone_agent.py` 已改为全屏 OCR 定位发送按钮，不再固定使用 0.68–0.80 裁剪区。
+- 新增 `src/xiaojuju_core/phone_ui.py` 和 `tests/test_phone_ui.py`，覆盖 OCR 坐标、漏字容错、当前输入法解析。
+- 人格与主动消息提示已补充：追问时先兑现具体内容，不编造当前状态，不用“啥啥/发呆”模板；主动消息禁止只卖关子。
+- 主动 outbox 发送成功后开始写回聊天历史；连续未回复消息改为聚合识别。
+- 已配置 `XiaoJuJu-Phone-Agent` 登录后延迟 20 秒启动。
+
+## 已验证证据
+
+- `uv run --extra dev pytest -q` 曾在平台阶段得到 `106 passed`。
+- 手机发送真机截图：
+  - `D:\yige-personal-kb\.runtime\phone-agent\screen.png`（中文发送）
+  - `D:\yige-personal-kb\.runtime\phone-agent\after-user-sent.png`（用户追问上下文）
+- 运行日志：`D:\yige-personal-kb\.runtime\phone-agent\phone-agent.log`
+- 运行手册：`D:\yige-personal-kb\xiaojuju\docs\runbooks\wechat-oppo-a96.md`
+
+## 当前未完成 / 风险
+
+- 电话智能体后台进程可能因桌面休眠、任务重启或 Brain Gateway 掉线而停止；需要持续监控和自动重启。
+- 最近一次真机追踪发现：
+  - 主动消息原先没有写入 state history，已经补了 outbox 写回逻辑但还没有完成最终全链路验收；
+  - 连续未回复消息原先只取最后一条，已改为聚合逻辑，但需在真实微信截图上确认稳定；
+  - 用户发送 `?` 这类单字符消息时 OCR 可能漏检，需要视觉兜底。
+- `uv.lock` 被本机镜像环境重写，属于不应提交的无关变更；最终提交前必须恢复。
+- `vendor/open-llm-vtuber` 有原有 submodule 状态提示，不要误提交。
+- 当前 phone_agent 代码改动尚未提交，需完成回归、真实收发和风险检查后再提交。
+- Brain Gateway 与 Phone Agent 是两个独立进程；登录启动、健康检查、重启策略必须补齐，不能只保证某一次手工启动成功。
+
+## 开源调研结论
+
+严格名为“给她一部手机”的 GitHub 仓库没有找到，最可能是中文传播标题。相关项目：
+
+- `lllq-123/phone-for-ai`：中文名“给 AI 一台手机”，MIT，Android 14+，伴侣 APK + 自托管服务器 + MCP + 网页控制台；只提供手机控制，不含人格/记忆。
+- `unitedbyai/droidclaw`：约 1.6k stars，TypeScript/Bun，ADB + 感知→判断→动作循环，适合旧安卓；无明确许可证元数据。
+- `zai-org/Open-AutoGLM`：约 26k stars，Apache-2.0，Android 7+，视觉 GUI Agent；适合任务型自动化，但模型 heavier。
+- `andycufari/movicom`：MIT，Node.js，控件树菜单化，token 省，但微信实测控件树基本为空，不适合作为微信主链路。
+
+选择原则：保留小居居现有 memory/persona/brain，借鉴 DroidClaw 的循环、Open-AutoGLM 的视觉执行、Phone for AI 的 MCP/伴侣结构；不把手机控制项目当成人格框架。
+
+## 下一步
+
+1. 固化架构接线：Brain Gateway、Phone Agent、Proactive、EventBus、MemoryStore、Outbox 的启动与健康监控必须闭环。
+2. 用真实微信完成“新消息 → 上下文 → 自然回复 → 结果验证 → 历史写回”端到端验收。
+3. 增加浏览器/网页工具和社交媒体适配器，所有外部操作经过权限、幂等和审计。
+4. 建立场景评估集：记忆连续性、追问兑现、主动消息质量、重复发送、断线恢复、AI 身份标注。
+5. 通过后再评估是否引入 DroidClaw/Open-AutoGLM 作为独立视觉执行器。
+
+## 相关文件
+
+- `D:\yige-personal-kb\xiaojuju\apps\phone_agent\phone_agent.py`
+- `D:\yige-personal-kb\xiaojuju\src\xiaojuju_core\phone_ui.py`
+- `D:\yige-personal-kb\xiaojuju\src\xiaojuju_core\brain.py`
+- `D:\yige-personal-kb\xiaojuju\src\xiaojuju_core\proactive.py`
+- `D:\yige-personal-kb\xiaojuju\src\xiaojuju_core\outbox.py`
+- `D:\yige-personal-kb\xiaojuju\prompts\live_persona.md`
+- `D:\yige-personal-kb\xiaojuju\docs\runbooks\wechat-oppo-a96.md`
+- `D:\yige-personal-kb\xiaojuju\docs\superpowers\plans\2026-10-26-01-agent-platform-foundation.md`
+## 2026-10-27 本轮新增接线
+
+- `XiaoJuJu-Agent-API` 已注册为登录后启动任务，端口 `127.0.0.1:12402`；启动脚本设置 `XJJ_SHADOW_MODE=false`。
+- 私有配置 `runtime.agent_gateway_url` 已指向 `http://127.0.0.1:12402`，phone_agent 会优先走新 Agent，失败才回退旧 12400。
+- 中文联系人 header 已做 URL 编码/API 解码，避免 `UnicodeEncodeError`。
+- `src/xiaojuju_agent/memory.py`：新 Agent 可读旧 SQLite 记忆并幂等写回；影子事件不写。
+- `src/xiaojuju_agent/outbox.py`：Postgres outbox 支持 enqueue、claim、retry、sent、failed、stale recovery。
+- `scripts/run_agent_phone_worker.py`：新 outbox 到手机发送的 worker，复用 phone_agent 并共享实例锁。
+- `src/xiaojuju_agent/style.py`：统一清理 Markdown、标题、列表和过长输出。
+- `phone_agent` 已支持新 Agent 历史上下文、连续未回复消息、主动消息历史写回；聊天内容裁剪现在按键盘/输入框动态避让。
+- 全仓测试本轮通过：`121 passed`。
+- 尚未完成：新 outbox worker 的真实发送验收；浏览器 worker；Celery Beat 自主生活/夜间反思；50+ 人格与记忆评估集。
+
+## 当前真机注意
+
+- 微信自动化单轮仍包含多次 OCR，响应可能较慢；需要继续压缩 OCR 区域和缓存截图。
+- ADBKeyboard 与百度输入法切换后必须恢复原输入法。
+- 手机后台任务和 Agent API 任务都需要健康监控与自动重启。

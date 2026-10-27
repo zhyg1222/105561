@@ -3,6 +3,7 @@ import logging
 import time
 import uuid
 from collections.abc import Iterator
+from urllib.parse import unquote
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -35,6 +36,23 @@ def last_user_text(payload: dict) -> str:
                 if isinstance(item, dict) and item.get("type") == "text"
             )
     return ""
+
+
+def recent_history(payload: dict) -> list[dict[str, str]]:
+    result = []
+    for message in payload.get("messages", [])[-16:]:
+        if not isinstance(message, dict) or message.get("role") not in {"user", "assistant"}:
+            continue
+        content = message.get("content", "")
+        if isinstance(content, list):
+            content = "".join(
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            )
+        if content:
+            result.append({"role": str(message["role"]), "content": str(content)})
+    return result
 
 
 def completion_body(event_id: str, model: str, text: str) -> dict:
@@ -160,7 +178,7 @@ def create_app(
         source = request.headers.get("X-XiaoJuJu-Source", "live")
         if source not in VALID_EVENT_SOURCES:
             raise HTTPException(status_code=422, detail="invalid source")
-        contact = request.headers.get("X-XiaoJuJu-User", "owner")
+        contact = unquote(request.headers.get("X-XiaoJuJu-User", "owner"))
         if not contact or len(contact) > 128:
             raise HTTPException(status_code=422, detail="invalid contact")
         requested_shadow = (
@@ -174,12 +192,15 @@ def create_app(
             span.set_attribute("source", source)
             span.set_attribute("contact_id", contact)
             span.set_attribute("shadow", requested_shadow)
+            history = recent_history(payload)
+            if history and history[-1].get("role") == "user" and history[-1].get("content") == text:
+                history = history[:-1]
             event = IncomingEvent(
                 event_id=event_id,
                 source="shadow" if requested_shadow else source,
                 kind="message",
                 contact_id=contact,
-                payload={"text": text},
+                payload={"text": text, "history": history},
                 trace_id=event_id,
                 shadow=requested_shadow,
             )

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from contextlib import AsyncExitStack, suppress
 
@@ -9,15 +10,19 @@ from .db import Database
 from .events import EventProcessing, EventStore
 from .graph.conversation import build_conversation_graph
 from .identity import IdentityBundle
+from .memory import MemoryProvider, NullMemoryProvider, format_memory_context
 from .settings import Settings
+
+logger = logging.getLogger(__name__)
 
 if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 class AgentRuntime:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, memory_provider: MemoryProvider | None = None):
         self.settings = settings
+        self.memory_provider = memory_provider or NullMemoryProvider()
         self.stack = AsyncExitStack()
         self._start_lock = asyncio.Lock()
         self._started = False
@@ -97,13 +102,24 @@ class AgentRuntime:
 
         shadow = bool(claim["shadow"])
         contact = claim["contact_id"] or "unknown"
+        user_text = str(claim["payload"].get("text", ""))
+        raw_history = claim["payload"].get("history", [])
+        history_context = "\n".join(
+            f"{item.get('role', 'user')}: {item.get('content', '')}"
+            for item in raw_history[-8:]
+            if isinstance(item, dict) and item.get("content")
+        )
         thread_id = f"{'shadow' if shadow else claim['source']}:{contact}"
+        memory_provider = getattr(self, "memory_provider", NullMemoryProvider())
         try:
+            memory_rows = await memory_provider.recall(contact, user_text)
             graph_result = await self.graph.ainvoke(
                 {
-                    "user_text": str(claim["payload"].get("text", "")),
+                    "user_text": user_text,
                     "messages": [],
                     "trace_id": claim["trace_id"],
+                    "memory_context": format_memory_context(memory_rows),
+                    "history_context": history_context,
                 },
                 {"configurable": {"thread_id": thread_id}},
             )
@@ -120,6 +136,17 @@ class AgentRuntime:
                 if current and current["result"] is not None:
                     return current["result"]
                 raise EventProcessing(event_id)
+            if not shadow:
+                try:
+                    await memory_provider.remember(
+                        contact,
+                        user_text,
+                        str(result["reply"]),
+                        event_id=event_id,
+                        source=str(claim["source"]),
+                    )
+                except Exception as exc:
+                    logger.warning("memory write failed: %s", exc, exc_info=True)
             return result
         except Exception as exc:
             await self.store.release_claim(event_id, claim["claim_token"], repr(exc))

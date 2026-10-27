@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from .api import create_app
 from .events import EventService
+from .memory import LegacyMemoryProvider
 from .observability import configure_observability
 from .policy import PolicyClient
 from .queue_app import process_event
@@ -39,7 +40,7 @@ def create_production_app(
     policy_client: PolicyClient | None = None,
 ):
     settings = settings or Settings.from_env()
-    runtime = runtime or AgentRuntime(settings)
+    runtime = runtime or AgentRuntime(settings, memory_provider=LegacyMemoryProvider())
     policy = policy_client or PolicyClient(settings.opa_url)
     tool_executor = ToolExecutor(policy)
     event_service = RuntimeEventService(runtime)

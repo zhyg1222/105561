@@ -10,3 +10,5 @@ class ConversationState(TypedDict, total=False):
     reply: str
     trace_id: str
     identity_hash: str
+    memory_context: str
+    history_context: str

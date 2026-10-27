@@ -27,3 +27,7 @@ class ProactiveTests(unittest.TestCase):
         raw=json.dumps({"should_send":True,"message":"# 今日报告\n"+"很长"*100,"reason":"汇报"},ensure_ascii=False)
         out=parse_proactive(raw)
         self.assertFalse(out["should_send"])
+    def test_hook_without_concrete_content_is_rejected(self):
+        raw=json.dumps({"should_send":True,"message":"我刚想到个事，要不要听两句？","reason":"卖关子"},ensure_ascii=False)
+        out=parse_proactive(raw)
+        self.assertFalse(out["should_send"])

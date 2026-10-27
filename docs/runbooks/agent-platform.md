@@ -180,3 +180,5 @@ Register-ScheduledTask `
 - 不通过修改 Prompt 绕过 OPA。
 - 不在未完成真实收发验收时宣称手机链路可用。
 - 不对 Docker 命名卷执行 `docker compose down -v`。
+
+现有微信真机链路另见：[`wechat-oppo-a96.md`](wechat-oppo-a96.md)。

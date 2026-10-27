@@ -42,7 +42,8 @@ async def test_chat_is_idempotent_and_ignores_client_system_prompt():
     assert second.json()["choices"][0]["message"]["content"] == "reply-1"
     assert processor.model_calls == 1
     stored = events.events["same-key"]
-    assert stored["payload"] == {"text": "hello"}
+    assert stored["payload"]["text"] == "hello"
+    assert stored["payload"]["history"] == []
     assert stored["shadow"] is True
 
 

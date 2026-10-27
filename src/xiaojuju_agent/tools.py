@@ -49,3 +49,44 @@ class ToolExecutor:
         if inspect.isawaitable(value):
             value = await value
         return ToolExecution(executed=True, decision=decision, result=value)
+
+
+class MessageSendTool:
+    """Policy-gated bridge from an Agent reply to the Postgres outbox."""
+
+    def __init__(self, executor: ToolExecutor, outbox):
+        self.executor = executor
+        self.outbox = outbox
+
+    async def send(
+        self,
+        *,
+        source: str,
+        contact_id: str,
+        text: str,
+        event_id: str,
+        shadow: bool = False,
+        approval: str | None = None,
+        kind: str = "message",
+    ) -> ToolExecution:
+        call = PolicyInput(
+            actor="xiaojuju",
+            source=source,
+            tool="message.send",
+            args={"text": text},
+            contact_id=contact_id,
+            risk="normal",
+            shadow=shadow,
+            side_effect=True,
+        )
+        message_id = f"{event_id}:send"
+        return await self.executor.execute(
+            call,
+            lambda: self.outbox.enqueue(
+                contact_id,
+                text,
+                kind=kind,
+                message_id=message_id,
+            ),
+            approval=approval,
+        )

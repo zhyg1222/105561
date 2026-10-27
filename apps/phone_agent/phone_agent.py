@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse, base64, hashlib, json, msvcrt, os, re, shutil, subprocess, sys, time, uuid
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 from pathlib import Path
 sys.path.insert(0, r'D:\yige-personal-kb\xiaojuju\src')
@@ -9,6 +10,14 @@ from xiaojuju_core.contacts import load_wechat_contacts, contact_key
 from xiaojuju_core.config import load_config
 from xiaojuju_core.outbox import pending_messages, mark_message
 from xiaojuju_core.adb_control import select_serial
+from xiaojuju_core.phone_ui import (
+    append_history_message,
+    extract_current_ime,
+    find_ocr_point,
+    join_ocr_text,
+    ocr_contains,
+    pending_left_after_last_right,
+)
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
@@ -30,7 +39,6 @@ DSH_BIN = Path(r'D:\yige-personal-kb\.runtime\dsh-personal\node_modules\@deepsee
 DSH_PROFILE = 'xiaojuju'
 PERSONA_DIR = KB / '12_社交代理' / '小居居'
 IME_ADB = 'com.android.adbkeyboard/.AdbIME'
-IME_ORIGINAL = 'com.iflytek.inputmethod.miui/.FlyIME'
 WECHAT_PROFILE = CONFIG['runtime']['wechat']
 WECHAT_PACKAGE = WECHAT_PROFILE['package']
 WECHAT_USER = str(WECHAT_PROFILE['android_user'])
@@ -39,6 +47,7 @@ PERSONA_CHAT_TITLE = WECHAT_PROFILE.get('chat_title', '\u5927\u54e5')
 CONTACTS_CONFIG = Path(CONFIG['social']['wechat_contacts_file'])
 MAX_CONTACTS_PER_TICK = int(CONFIG['social'].get('max_contacts_per_tick', 5))
 BRAIN_GATEWAY = CONFIG['runtime']['brain_gateway_url']
+AGENT_GATEWAY = os.environ.get('XJJ_AGENT_GATEWAY', '').strip() or str(CONFIG['runtime'].get('agent_gateway_url', '')).strip()
 LIFE_STATE = PERSONA_DIR / '\u72b6\u6001' / '\u5f53\u524d\u72b6\u6001.json'
 MEMORY_EVENTS = PERSONA_DIR / '\u8bb0\u5fc6' / '\u4e8b\u4ef6.jsonl'
 OCR = RapidOCR()
@@ -82,6 +91,11 @@ def run_adb(*args, timeout=30):
 def adb_text(*args, timeout=30):
     r = run_adb(*args, timeout=timeout)
     return r.stdout.decode('utf-8', 'replace').strip()
+
+
+def adb_result_text(result):
+    return (result.stdout + result.stderr).decode('utf-8', 'replace').strip()
+
 
 def log(line):
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -135,11 +149,31 @@ def message_side(image_path, box, w, h):
     return 'right' if max(xs) >= w * 0.58 else 'left'
 
 
+def parse_all_messages(result, image_path, w, h):
+    """Parse all visible chat messages in top-to-bottom order."""
+    found = []
+    for box, text, score in result:
+        ys = [p[1] for p in box]
+        cy = (min(ys) + max(ys)) / 2; box_h = max(ys) - min(ys)
+        t = str(text).strip()
+        if score < 0.65 or not t or len(t) > 300:
+            continue
+        if box_h < max(26, h * 0.015):
+            continue
+        if cy < h * 0.03 or cy > h * 0.98:
+            continue
+        if is_timestamp(t) or t in CHAT_CHROME_TEXTS:
+            continue
+        side = message_side(image_path, box, w, h)
+        found.append({'text': t, 'y': cy, 'score': score, 'side': side})
+    return sorted(found, key=lambda item: item['y'])
+
+
 def parse_latest_message(result, image_path, w, h):
     """Return the bottom-most chat text and whether it came from the left side."""
     found = []
     for box, text, score in result:
-        xs = [p[0] for p in box]; ys = [p[1] for p in box]
+        ys = [p[1] for p in box]
         cy = (min(ys) + max(ys)) / 2; box_h = max(ys) - min(ys)
         t = str(text).strip()
         if score < 0.65 or not t or len(t) > 300:
@@ -160,6 +194,17 @@ def parse_latest_message(result, image_path, w, h):
     return {'text': text, 'y': cy, 'score': score, 'side': side}
 
 
+def content_bottom(h):
+    """Exclude the visible composer and keyboard from chat-message OCR."""
+    info = adb_text('shell', 'dumpsys', 'input_method')
+    keyboard_visible = 'mInputShown=true' in info or 'mShowRequested=true' in info
+    if keyboard_visible:
+        if 'com.android.adbkeyboard' in info:
+            return int(h * 0.84)
+        return int(h * 0.58)
+    return int(h * 0.91)
+
+
 def check_header(img, w, h, title=PERSONA_CHAT_TITLE):
     p = RUNTIME / 'header.png'
     crop(img, (int(w*0.2), int(h*0.03), int(w*0.8), int(h*0.11)), p)
@@ -172,7 +217,7 @@ def check_header(img, w, h, title=PERSONA_CHAT_TITLE):
 def read_incoming(img):
     im = Image.open(img); w, h = im.size
     content = RUNTIME / 'content.png'
-    crop(img, (0, int(h*0.12), w, int(h*0.915)), content)
+    crop(img, (0, int(h*0.12), w, content_bottom(h)), content)
     result, _ = ocr_image(content)
     ch = Image.open(content).size[1]
     latest = parse_latest_message(result, content, w, ch)
@@ -180,6 +225,20 @@ def read_incoming(img):
         return w, h, None
     latest['y'] += h * 0.12
     return w, h, latest
+
+
+def read_unanswered_incoming(img):
+    """Return left-side messages after the last visible outgoing message."""
+    im = Image.open(img); w, h = im.size
+    content = RUNTIME / 'content.png'
+    crop(img, (0, int(h*0.12), w, content_bottom(h)), content)
+    result, _ = ocr_image(content)
+    ch = Image.open(content).size[1]
+    messages = parse_all_messages(result, content, w, ch)
+    pending = pending_left_after_last_right(messages)
+    for item in pending:
+        item['y'] += h * 0.12
+    return w, h, pending
 
 
 def focus_is_xiaojuju():
@@ -192,7 +251,11 @@ def focus_is_xiaojuju():
 
 def keyboard_shown():
     info = adb_text('shell', 'dumpsys', 'input_method')
-    return 'mInputShown=true' in info
+    return 'mInputShown=true' in info or 'mShowRequested=true' in info
+
+
+def current_ime():
+    return extract_current_ime(adb_text('shell', 'dumpsys', 'input_method'))
 
 
 def ensure_xiaojuju_chat(contact=PERSONA_CHAT_TITLE):
@@ -342,6 +405,33 @@ def parse_dsh_json(stdout):
     return clean_reply(final), saw_json
 
 
+def _brain_agent_gateway(incoming, history, contact, event_id):
+    messages = [
+        {'role': x.get('role', 'user'), 'content': x.get('text', '')}
+        for x in history[-8:]
+        if x.get('text')
+    ]
+    messages.append({'role': 'user', 'content': incoming})
+    req = Request(
+        AGENT_GATEWAY.rstrip('/') + '/v1/chat/completions',
+        data=json.dumps({'model': 'xiaojuju', 'messages': messages}, ensure_ascii=False).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json; charset=utf-8',
+            'Idempotency-Key': event_id or uuid.uuid4().hex,
+            'X-XiaoJuJu-Source': 'wechat',
+            'X-XiaoJuJu-User': quote(contact, safe=''),
+            'X-XiaoJuJu-Shadow': 'false',
+        },
+        method='POST',
+    )
+    with urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    reply = str(data['choices'][0]['message']['content']).strip()
+    if not reply:
+        raise RuntimeError('empty agent gateway reply')
+    return reply
+
+
 def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE, event_id=None):
     event = {
         'event_id': event_id or uuid.uuid4().hex,
@@ -355,6 +445,11 @@ def brain(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE, eve
             for x in history[-6:]
         ],
     }
+    if AGENT_GATEWAY:
+        try:
+            return _brain_agent_gateway(incoming, history, contact, event['event_id'])
+        except Exception as exc:
+            log('new agent gateway failed; trying legacy gateway: ' + repr(exc))
     try:
         req = Request(
             BRAIN_GATEWAY + '/v1/respond',
@@ -444,23 +539,47 @@ def _brain_dsh(incoming, history, persist_state=True, contact=PERSONA_CHAT_TITLE
     return ''
 
 
-def restore_ime():
-    run_adb('shell', 'ime', 'set', IME_ORIGINAL)
-    run_adb('shell', 'ime', 'disable', IME_ADB)
+def restore_ime(original_ime):
+    if not original_ime or original_ime == IME_ADB:
+        return
+    result = run_adb('shell', 'ime', 'set', original_ime)
+    if result.returncode != 0:
+        log('restore input method failed: ' + adb_result_text(result)[:300])
+
+
+def switch_to_adb_ime():
+    original = current_ime()
+    if original == IME_ADB:
+        return original
+    for action in ('enable', 'set'):
+        result = run_adb('shell', 'ime', action, IME_ADB)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f'ADBKeyboard {action} failed; enable OPPO Developer options > Disable permission monitoring and reboot: '
+                + adb_result_text(result)[:300]
+            )
+    time.sleep(0.8)
+    after = current_ime()
+    if after != IME_ADB:
+        raise RuntimeError(f'ADBKeyboard is not active (current IME: {after or "unknown"})')
+    return original
+
 
 def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
     shot_path = ensure_xiaojuju_chat(contact)
     if not shot_path:
         return False
     w, h = Image.open(shot_path).size
-    latest = read_incoming(shot_path)[2]
-    if expected_incoming is not None and (not latest or latest.get('text') != expected_incoming):
+    _, _, pending_before_send = read_unanswered_incoming(shot_path)
+    actual_incoming = '\n'.join(item['text'] for item in pending_before_send)
+    if expected_incoming is not None and actual_incoming != expected_incoming:
         log('conversation changed before send; skip')
         return False
     if not focus_is_xiaojuju():
         log('user-999 WeChat lost focus before typing; skip')
         return False
 
+    original_ime = current_ime()
     run_adb('shell', 'svc', 'power', 'stayon', 'true')
     run_adb('shell', 'input', 'tap', str(w // 2), str(int(h * 0.94)))
     time.sleep(1)
@@ -471,48 +590,50 @@ def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
         log('composer did not open the keyboard; skip')
         return False
 
-    run_adb('shell', 'ime', 'enable', IME_ADB)
-    run_adb('shell', 'ime', 'set', IME_ADB)
-    time.sleep(0.8)
     try:
-        if not focus_is_xiaojuju():
-            log('user-999 WeChat lost focus after IME switch; skip')
+        switch_to_adb_ime()
+        clear = run_adb('shell', 'am', 'broadcast', '-a', 'ADB_CLEAR_TEXT')
+        if clear.returncode != 0:
+            log('ADBKeyboard clear failed: ' + adb_result_text(clear)[:300])
             return False
         b64 = base64.b64encode(text.encode('utf-8')).decode('ascii')
-        run_adb('shell', 'am', 'broadcast', '-a', 'ADB_INPUT_B64', '--es', 'msg', b64)
+        typed = run_adb('shell', 'am', 'broadcast', '-a', 'ADB_INPUT_B64', '--es', 'msg', b64)
+        if typed.returncode != 0:
+            log('ADBKeyboard input failed: ' + adb_result_text(typed)[:300])
+            return False
         time.sleep(1)
         if not focus_is_xiaojuju():
             log('user-999 WeChat lost focus after text input; skip')
             return False
-        check = RUNTIME / 'composer.png'
         check_img = shot()
-        crop(check_img, (0, int(h*0.68), w, int(h*0.80)), check)
-        result, _ = ocr_image(check)
-        visible = ''.join(str(t) for _, t, s in result if s >= 0.5)
-        norm = lambda x: re.sub(r'[^\u4e00-\u9fff0-9A-Za-z]', '', x)
-        head = norm(text)[:6]
-        if not head or head not in norm(visible):
-            log('composer verification failed: ' + visible[:120])
+        result, _ = ocr_image(check_img)
+        if not ocr_contains(result, text):
+            log('composer verification failed: ' + join_ocr_text(result)[:120])
             run_adb('shell', 'am', 'broadcast', '-a', 'ADB_CLEAR_TEXT')
             return False
-        send = None
-        for box, label, score in result:
-            if '\u53d1\u9001' in str(label) and score >= 0.5:
-                xs=[q[0] for q in box]; ys=[q[1] for q in box]
-                send=(int((min(xs)+max(xs))/2), int((min(ys)+max(ys))/2)+int(h*0.68))
-                break
+        send = find_ocr_point(result, '\u53d1\u9001', min_y=h * 0.45, max_y=h * 0.97)
         if send is None:
             log('send button not found')
             run_adb('shell', 'am', 'broadcast', '-a', 'ADB_CLEAR_TEXT')
             return False
         run_adb('shell', 'input', 'tap', str(send[0]), str(send[1]))
         time.sleep(2)
+        after = shot()
+        after_result, _ = ocr_image(after)
+        if find_ocr_point(after_result, '\u53d1\u9001', min_y=h * 0.45, max_y=h * 0.97):
+            log('send did not clear the composer')
+            return False
+        dismiss_keyboard()
+        after = shot()
+        after_result, _ = ocr_image(after)
+        if not ocr_contains(after_result, text):
+            log('message sent but outgoing bubble verification failed')
+            return False
         return focus_is_xiaojuju()
     finally:
-        restore_ime()
+        restore_ime(original_ime)
         if focus_is_xiaojuju():
             dismiss_keyboard()
-
 
 def dismiss_keyboard():
     if not focus_is_xiaojuju():
@@ -531,19 +652,21 @@ def process_contact(contact, prime=False):
     shot_path = ensure_xiaojuju_chat(contact)
     if not shot_path:
         return False
-    incoming = read_incoming(shot_path)[2]
-    if not incoming:
+    _, _, pending_incoming = read_unanswered_incoming(shot_path)
+    if not pending_incoming:
         log(f'[{contact}] no incoming text found')
         return False
+    incoming = pending_incoming[-1]
+    text = '\n'.join(item['text'] for item in pending_incoming)
     state = load_state(contact)
-    text = incoming['text']; now = time.time()
+    now = time.time()
     if text == state.get('last_incoming_text') and now - float(state.get('last_sent_at', 0)) < 20:
         return False
     if prime:
         state['last_incoming_text'] = text
         state['last_incoming_y'] = incoming['y']
         state['last_sent_at'] = now
-        state.setdefault('history', []).append({'role': 'user', 'text': text, 'at': now})
+        append_history_message(state.setdefault('history', []), 'user', text, now)
         save_state(state, contact)
         log(f'[{contact}] primed last incoming: ' + text)
         return True
@@ -560,12 +683,8 @@ def process_contact(contact, prime=False):
     if not ok:
         log(f'[{contact}] send failed')
         return False
-    state.setdefault('history', [])
-    state['history'] += [
-        {'role': 'user', 'text': text, 'at': now},
-        {'role': 'assistant', 'text': reply, 'at': time.time()},
-    ]
-    state['history'] = state['history'][-20:]
+    append_history_message(state.setdefault('history', []), 'user', text, now)
+    append_history_message(state['history'], 'assistant', reply, time.time())
     state['last_incoming_text'] = text
     state['last_incoming_y'] = incoming['y']
     state['last_sent_at'] = time.time()
@@ -593,6 +712,11 @@ def process_outbox(allowed_contacts):
             continue
         if ok:
             mark_message(msg["id"], "sent")
+            state = load_state(contact)
+            append_history_message(
+                state.setdefault('history', []), 'assistant', msg.get("text", ""), time.time()
+            )
+            save_state(state, contact)
             sent += 1
         else:
             mark_message(msg["id"], "queued", "send failed")
