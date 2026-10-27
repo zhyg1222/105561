@@ -15,8 +15,9 @@ class ToolExecution:
 
 
 class ToolExecutor:
-    def __init__(self, policy_client: PolicyClient | None):
+    def __init__(self, policy_client: PolicyClient | None, approval_store=None):
         self.policy_client = policy_client
+        self.approval_store = approval_store
 
     async def execute(
         self,
@@ -38,10 +39,33 @@ class ToolExecutor:
 
         decision = await self.policy_client.decision(call)
         if decision.effect == "require_approval":
-            decision = PolicyDecision(
-                effect="require_approval",
-                reason="approval_required" if not approval else "approval_not_verified",
+            if not approval or self.approval_store is None:
+                pending = None
+                if self.approval_store is not None:
+                    pending = await self.approval_store.create(
+                        event_id=call.event_id,
+                        tool=call.tool,
+                        args=call.args,
+                    )
+                return ToolExecution(
+                    executed=False,
+                    decision=PolicyDecision(effect="require_approval", reason="approval_required"),
+                    result={"approval_id": pending["approval_id"], "status": "pending"}
+                    if pending
+                    else None,
+                )
+            approved = await self.approval_store.consume(
+                approval,
+                event_id=call.event_id,
+                tool=call.tool,
+                args=call.args,
             )
+            if not approved:
+                return ToolExecution(
+                    executed=False,
+                    decision=PolicyDecision(effect="require_approval", reason="approval_invalid"),
+                )
+            decision = PolicyDecision(effect="allow", reason="approval_consumed")
         if decision.effect != "allow":
             return ToolExecution(executed=False, decision=decision)
 
@@ -75,6 +99,7 @@ class MessageSendTool:
             tool="message.send",
             args={"text": text},
             contact_id=contact_id,
+            event_id=event_id,
             risk="normal",
             shadow=shadow,
             side_effect=True,

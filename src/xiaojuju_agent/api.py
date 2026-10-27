@@ -98,12 +98,14 @@ def create_app(
     *,
     force_shadow: bool = True,
     tool_executor=None,
+    approval_store=None,
 ) -> FastAPI:
     app = FastAPI()
     app.state.event_service = event_service
     app.state.process_event = process_event
     app.state.policy_client = policy_client
     app.state.tool_executor = tool_executor
+    app.state.approval_store = approval_store
 
     @app.get("/healthz")
     async def healthz():
@@ -164,6 +166,35 @@ def create_app(
             },
             status_code=202 if result.accepted else 200,
         )
+
+    @app.get("/v1/approvals")
+    async def list_approvals(request: Request):
+        store = getattr(request.app.state, "approval_store", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="approval store unavailable")
+        return {"approvals": await store.list_pending()}
+
+    @app.post("/v1/approvals/{approval_id}/approve")
+    async def approve(approval_id: str, request: Request):
+        store = getattr(request.app.state, "approval_store", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="approval store unavailable")
+        if await store.get(approval_id) is None:
+            raise HTTPException(status_code=404, detail="approval not found")
+        if not await store.decide(approval_id, "approved"):
+            raise HTTPException(status_code=409, detail="approval is not pending")
+        return {"approval_id": approval_id, "status": "approved"}
+
+    @app.post("/v1/approvals/{approval_id}/reject")
+    async def reject(approval_id: str, request: Request):
+        store = getattr(request.app.state, "approval_store", None)
+        if store is None:
+            raise HTTPException(status_code=503, detail="approval store unavailable")
+        if await store.get(approval_id) is None:
+            raise HTTPException(status_code=404, detail="approval not found")
+        if not await store.decide(approval_id, "rejected"):
+            raise HTTPException(status_code=409, detail="approval is not pending")
+        return {"approval_id": approval_id, "status": "rejected"}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):

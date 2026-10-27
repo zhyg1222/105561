@@ -134,3 +134,43 @@ async def test_streaming_chat_ends_with_done(app):
         )
     assert response.status_code == 200
     assert response.text.endswith("data: [DONE]\n\n")
+
+
+class FakeApprovalStore:
+    def __init__(self):
+        self.rows = {"a1": {"approval_id": "a1", "status": "pending"}}
+
+    async def list_pending(self):
+        return [row for row in self.rows.values() if row["status"] == "pending"]
+
+    async def get(self, approval_id):
+        return self.rows.get(approval_id)
+
+    async def decide(self, approval_id, status):
+        row = self.rows.get(approval_id)
+        if not row or row["status"] != "pending":
+            return False
+        row["status"] = status
+        return True
+
+
+@pytest.mark.asyncio
+async def test_approval_endpoints_are_explicit_and_one_shot():
+    store = FakeApprovalStore()
+    app = create_app(
+        FakeEventService(),
+        IdempotentProcessor(),
+        lambda event_id: None,
+        None,
+        approval_store=store,
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        listed = await client.get("/v1/approvals")
+        approved = await client.post("/v1/approvals/a1/approve")
+        again = await client.post("/v1/approvals/a1/approve")
+
+    assert listed.status_code == 200
+    assert listed.json()["approvals"][0]["approval_id"] == "a1"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert again.status_code == 409

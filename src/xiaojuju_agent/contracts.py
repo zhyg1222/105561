@@ -36,6 +36,7 @@ class PolicyInput(BaseModel):
     tool: str
     args: dict[str, Any]
     contact_id: str | None = None
+    event_id: str | None = None
     risk: str = "normal"
     shadow: bool = True
     side_effect: bool = True

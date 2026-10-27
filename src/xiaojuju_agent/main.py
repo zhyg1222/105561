@@ -3,7 +3,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from .api import create_app
-from .browser import BrowserReadTool, as_langchain_browser_tool
+from .approvals import ApprovalStore
+from .browser import (
+    BrowserActionTool,
+    BrowserReadTool,
+    as_langchain_action_tool,
+    as_langchain_browser_tool,
+)
 from .events import EventService
 from .memory import LegacyMemoryProvider
 from .observability import configure_observability
@@ -47,10 +53,12 @@ def create_production_app(
     web_search = WebSearchTool(tool_executor)
     web_fetch = WebFetchTool(tool_executor)
     browser_read = BrowserReadTool(tool_executor)
+    browser_action = BrowserActionTool(tool_executor)
     runtime = runtime or AgentRuntime(
         settings,
         memory_provider=LegacyMemoryProvider(),
-        tools=as_langchain_tools(web_search, web_fetch) + [as_langchain_browser_tool(browser_read)],
+        tools=as_langchain_tools(web_search, web_fetch)
+        + [as_langchain_browser_tool(browser_read), as_langchain_action_tool(browser_action)],
     )
     event_service = RuntimeEventService(runtime)
 
@@ -73,6 +81,8 @@ def create_production_app(
         app.state.startup_error = None
         try:
             await runtime.start()
+            app.state.approval_store = ApprovalStore(runtime.db)
+            tool_executor.approval_store = app.state.approval_store
         except Exception as exc:
             app.state.startup_error = exc
             logger.exception("agent runtime startup failed")
@@ -98,6 +108,7 @@ def create_production_app(
         policy_client=policy,
         force_shadow=settings.shadow_mode,
         tool_executor=tool_executor,
+        approval_store=None,
     )
     app.router.lifespan_context = lifespan
     configure_observability(settings, app=app)

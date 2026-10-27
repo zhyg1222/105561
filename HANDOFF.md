@@ -115,3 +115,11 @@
 - `Database.open` 改为可配置的 `db_open_timeout_seconds=45`，适配 Windows + WSL2 冷启动。
 - WSL 必须由 `XiaoJuJu-Agent-Stack`/`sleep infinity` 保活；否则 Docker 容器和端口会反复重建。
 - 运行手册：`docs/runbooks/persona-evaluation.md`。
+## 浏览器与审批
+
+- `browser_read` 已接入真实 Chrome/Puppeteer 渲染读取，不是简单 HTTP 抓取；已验证 example.com。
+- `browser_action` 支持 navigate/click/type/press/wait 计划，但所有动作必须经过 OPA 审批。
+- `app_approvals` 已有一键创建待审批、批准、拒绝、过期和一次性消费；审批必须匹配 event_id、工具和参数。
+- API 端点：`GET /v1/approvals`、`POST /v1/approvals/{id}/approve`、`POST /v1/approvals/{id}/reject`。
+- 运行手册：`docs/runbooks/browser-and-approvals.md`。
+- 当前仍不自动发布社交内容；发布必须先明确批准。
