@@ -1,3 +1,21 @@
+# 小居居目标交接（继续审计更新）
+
+> 更新时间：2026-10-27 22:37  
+> 状态：active，未完成。
+
+## 新增完成
+
+- `50ab186`：自主生活/主动聊天心跳、健康检查扩展、历史记忆回填。
+- `XiaoJuJu-Autonomy` 和 `XiaoJuJu-Proactive-Chat` 已实际触发；心跳文件分别写入 `.runtime/autonomy/last_run.json`、`.runtime/proactive/last_run.json`。
+- 健康检查现在同时验证 autonomy/proactive 心跳，过期会触发任务重启与 owner outbox 告警。
+- 历史记忆回填 dry-run 找到 274 个缺失事件，过滤评测/测试事件后回填 3 条真实微信对话；候选最终全部 `done`。
+- 当前全量测试：`154 passed`。
+
+## 仍需用户动作
+
+小红书真实账号登录仍需要扫码；登录 cookie 不存在，`/v1/social/session?platform=xiaohongshu&account=xiaojuju` 当前为 `valid=false`。扫码后继续做真实发布、页面回执和抖音/视频号登录。
+
+---
 # 小居居目标交接（自动续跑更新）
 
 > 更新时间：2026-10-27 22:21  
