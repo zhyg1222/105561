@@ -1,3 +1,39 @@
+# 小居居目标交接（自动续跑更新）
+
+> 更新时间：2026-10-27 22:21  
+> 状态：active，预算 100,000,000 token，未完成。
+
+## 本轮新增
+
+- `85ae051`：多轮评估、健康监控、PostgreSQL/Neo4j 备份恢复演练。
+- 多轮评估新增 `evals/multiturn_scenarios.jsonl`，覆盖跨轮记忆、项目上下文、纠正偏好、AI 身份、审批、安全边界和回滚。
+- 多轮实测：`8/8` 通过。
+- 单轮 50 场景最近一次：`49/50`；唯一失败是评分词表误把自然的“好的内容”判为禁止词，定向复测已通过。
+- 评估器对 429/5xx 增加指数退避重试，避免把模型服务瞬时 503 记成人格失败。
+- 健康监控任务：`XiaoJuJu-Health-Monitor`，每 5 分钟运行 `scripts/health_check.py --repair --notify`。
+- 健康检查当前 `ok=true`：API、Postgres、Neo4j、Memory worker、Phone agent、ADB 全部正常；WSL 子进程在健康检查进程中被系统拒绝时标记为跳过，服务端口由其他检查覆盖。
+- 备份恢复演练：PostgreSQL 生产/恢复计数一致（`514|230|0|3`）；Neo4j 导出 236 episodes / 442 edges，临时集合恢复 236 并清理；临时数据库无残留。
+- 清理了 3 条测试审批和 224 个 `conversation:eval:` 测试 episode。
+
+## 当前唯一外部阻塞
+
+小红书、抖音、视频号都还没有有效登录 cookie。二维码登录需要用户手机扫码；在此之前不能做真实公开发布验收。
+
+登录恢复命令：
+
+```powershell
+D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe scripts\start_social_login.py xiaohongshu --account xiaojuju --wait-seconds 25
+```
+
+扫码后先检查：
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:12402/v1/social/session?platform=xiaohongshu&account=xiaojuju"
+```
+
+只有 `valid=true` 才进入批准和发布测试。发布仍需一次性审批，不能把 `submitted` 当成 `published`。
+
+---
 # 小居居目标交接（最新）
 
 > 更新时间：2026-10-27  
