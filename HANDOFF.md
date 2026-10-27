@@ -84,7 +84,7 @@
 - `scripts/run_agent_phone_worker.py`：新 outbox 到手机发送的 worker，复用 phone_agent 并共享实例锁。
 - `src/xiaojuju_agent/style.py`：统一清理 Markdown、标题、列表和过长输出。
 - `phone_agent` 已支持新 Agent 历史上下文、连续未回复消息、主动消息历史写回；聊天内容裁剪现在按键盘/输入框动态避让。
-- 全仓测试本轮通过：`138 passed`。
+- 全仓测试本轮通过：`141 passed`。
 - 尚未完成：新 outbox worker 的真实发送验收；浏览器 worker；Celery Beat 自主生活/夜间反思；50+ 人格与记忆评估集。
 
 ## 当前真机注意
@@ -94,7 +94,7 @@
 - 手机后台任务和 Agent API 任务都需要健康监控与自动重启。
 ## 工具回路与最新提交
 
-- 最新 main：`1fa36db fix: bind browser approvals to event ids`；此前为 `e39f146 feat: add browser actions and one-time approvals`。
+- 最新 main：`e3b1a6e fix: make autonomous activity goal-aligned and retryable`；此前为 `1fa36db fix: bind browser approvals to event ids`。
 - `web_search` 已接入 LangGraph：模型可发起工具调用，`WebSearchTool` 经 OPA 只读检查，结果回到同一 checkpoint。
 - 真实 DeepSeek + 公共搜索已验证，返回内容能作为最终回复依据。
 - 失败后残留的 dangling tool_call 会自动补 `ToolMessage`，修复顺序是先修复旧工具结果，再追加新用户消息。
