@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from .api import create_app
+from .browser import BrowserReadTool, as_langchain_browser_tool
 from .events import EventService
 from .memory import LegacyMemoryProvider
 from .observability import configure_observability
@@ -45,10 +46,11 @@ def create_production_app(
     tool_executor = ToolExecutor(policy)
     web_search = WebSearchTool(tool_executor)
     web_fetch = WebFetchTool(tool_executor)
+    browser_read = BrowserReadTool(tool_executor)
     runtime = runtime or AgentRuntime(
         settings,
         memory_provider=LegacyMemoryProvider(),
-        tools=as_langchain_tools(web_search, web_fetch),
+        tools=as_langchain_tools(web_search, web_fetch) + [as_langchain_browser_tool(browser_read)],
     )
     event_service = RuntimeEventService(runtime)
 

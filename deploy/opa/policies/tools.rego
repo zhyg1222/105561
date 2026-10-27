@@ -8,7 +8,7 @@ decision := {"effect": "deny", "reason": "shadow_side_effect"} if {
 }
 
 decision := {"effect": "allow", "reason": "public_read"} if {
-    input.tool in {"web.search", "web.fetch"}
+    input.tool in {"web.search", "web.fetch", "browser.read"}
     input.side_effect == false
 }
 
