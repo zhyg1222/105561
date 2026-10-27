@@ -12,6 +12,7 @@ from .events import EventProcessing, EventStore
 from .graph.conversation import build_conversation_graph
 from .identity import IdentityBundle
 from .memory import MemoryProvider, NullMemoryProvider, format_memory_context
+from .memory_queue import build_memory_candidate
 from .settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,16 @@ if sys.platform == "win32" and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"
 
 class AgentRuntime:
     def __init__(
-        self, settings: Settings, memory_provider: MemoryProvider | None = None, tools=None
+        self,
+        settings: Settings,
+        memory_provider: MemoryProvider | None = None,
+        tools=None,
+        *,
+        durable_memory_enabled: bool = False,
     ):
         self.settings = settings
         self.memory_provider = memory_provider or NullMemoryProvider()
+        self.durable_memory_enabled = durable_memory_enabled
         self.tools = tools or []
         self.stack = AsyncExitStack()
         self._start_lock = asyncio.Lock()
@@ -141,13 +148,28 @@ class AgentRuntime:
                 "trace_id": claim["trace_id"],
                 "identity_hash": graph_result.get("identity_hash", ""),
             }
-            saved = await self.store.save_result(event_id, result, claim["claim_token"])
+            memory_candidate = None
+            if not shadow and getattr(self, "durable_memory_enabled", False):
+                memory_candidate = build_memory_candidate(
+                    event_id=event_id,
+                    contact=contact,
+                    user_text=user_text,
+                    assistant_text=str(result["reply"]),
+                    source=str(claim["source"]),
+                    reference_time=claim.get("timestamp"),
+                )
+            saved = await self.store.save_result(
+                event_id,
+                result,
+                claim["claim_token"],
+                memory_candidate=memory_candidate,
+            )
             if not saved:
                 current = await self.store.get_event(event_id)
                 if current and current["result"] is not None:
                     return current["result"]
                 raise EventProcessing(event_id)
-            if not shadow:
+            if not shadow and memory_candidate is None:
                 try:
                     await memory_provider.remember(
                         contact,

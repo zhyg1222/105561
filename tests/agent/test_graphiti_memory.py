@@ -86,6 +86,33 @@ async def test_graphiti_provider_writes_and_recalls_with_contact_isolation():
 
 
 @pytest.mark.asyncio
+async def test_durable_candidate_uses_stable_episode_business_key():
+    settings = Settings(
+        graphiti_enabled=True,
+        deepseek_api_key=SecretStr("dummy"),
+        neo4j_password=SecretStr("dummy"),
+    )
+    legacy = FakeLegacy()
+    graph = FakeGraph()
+    provider = GraphitiMemoryProvider(settings, legacy=legacy, client_factory=lambda _: graph)
+    candidate = {
+        "event_id": "event-durable",
+        "contact_id": "owner",
+        "user_text": "hello",
+        "assistant_text": "world",
+        "source": "wechat",
+        "group_id": "contact_owner",
+        "reference_time": datetime.now(UTC),
+    }
+
+    await provider.persist_candidate(candidate)
+
+    assert graph.episodes[0]["name"] == "conversation:event-durable"
+    assert "uuid" not in graph.episodes[0]
+    assert legacy.writes[0][3] == "event-durable"
+
+
+@pytest.mark.asyncio
 async def test_graphiti_failure_falls_back_to_legacy():
     settings = Settings(
         graphiti_enabled=True,

@@ -45,6 +45,31 @@ CREATE TABLE IF NOT EXISTS app_approvals (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS app_memory_candidates (
+    candidate_id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL UNIQUE REFERENCES app_events(event_id),
+    contact_id TEXT NOT NULL,
+    user_text TEXT NOT NULL,
+    assistant_text TEXT NOT NULL,
+    source TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    reference_time TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued','processing','done','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    claim_token TEXT,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS app_memory_candidates_ready_idx
+    ON app_memory_candidates (next_attempt_at, created_at)
+    WHERE status = 'queued';
+
 CREATE TABLE IF NOT EXISTS app_tool_runs (
     run_id TEXT PRIMARY KEY,
     event_id TEXT REFERENCES app_events(event_id),

@@ -76,6 +76,15 @@ class LegacyMemoryProvider:
             source=source,
         )
 
+    async def persist_candidate(self, candidate: dict[str, Any]) -> None:
+        await self.remember(
+            str(candidate["contact_id"]),
+            str(candidate["user_text"]),
+            str(candidate["assistant_text"]),
+            event_id=str(candidate["event_id"]),
+            source=str(candidate["source"]),
+        )
+
 
 def format_memory_context(rows: list[dict[str, Any]]) -> str:
     if not rows:

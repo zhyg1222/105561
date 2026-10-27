@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .contracts import IncomingEvent
+from .memory_queue import MemoryCandidate, insert_memory_candidate
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,14 @@ class EventStore:
             )
             return await cur.fetchone()
 
-    async def save_result(self, event_id: str, result: dict, claim_token: str) -> bool:
+    async def save_result(
+        self,
+        event_id: str,
+        result: dict,
+        claim_token: str,
+        *,
+        memory_candidate: MemoryCandidate | None = None,
+    ) -> bool:
         async with self.db.transaction() as conn:
             cur = await conn.execute(
                 """
@@ -138,7 +146,10 @@ class EventStore:
                 """,
                 (json.dumps(result, ensure_ascii=False), event_id, claim_token),
             )
-            return cur.rowcount == 1
+            saved = cur.rowcount == 1
+            if saved and memory_candidate is not None:
+                await insert_memory_candidate(conn, memory_candidate)
+            return saved
 
     async def release_claim(self, event_id: str, claim_token: str, error: str) -> None:
         async with self.db.transaction() as conn:

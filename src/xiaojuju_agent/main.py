@@ -13,6 +13,7 @@ from .browser import (
 from .events import EventService
 from .graphiti_memory import GraphitiMemoryProvider
 from .memory import LegacyMemoryProvider
+from .memory_queue import MemoryQueueStore
 from .observability import configure_observability
 from .policy import PolicyClient
 from .queue_app import process_event
@@ -63,6 +64,7 @@ def create_production_app(
         memory_provider=memory_provider,
         tools=as_langchain_tools(web_search, web_fetch)
         + [as_langchain_browser_tool(browser_read), as_langchain_action_tool(browser_action)],
+        durable_memory_enabled=settings.graphiti_enabled,
     )
     event_service = RuntimeEventService(runtime)
 
@@ -86,6 +88,7 @@ def create_production_app(
         try:
             await runtime.start()
             app.state.approval_store = ApprovalStore(runtime.db)
+            app.state.memory_queue = MemoryQueueStore(runtime.db)
             tool_executor.approval_store = app.state.approval_store
         except Exception as exc:
             app.state.startup_error = exc
@@ -113,6 +116,7 @@ def create_production_app(
         force_shadow=settings.shadow_mode,
         tool_executor=tool_executor,
         approval_store=None,
+        memory_queue=None,
     )
     app.router.lifespan_context = lifespan
     configure_observability(settings, app=app)

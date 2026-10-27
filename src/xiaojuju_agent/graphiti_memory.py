@@ -24,6 +24,15 @@ from .settings import Settings
 logger = logging.getLogger(__name__)
 
 
+def _as_utc(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        parsed = datetime.fromisoformat(value)
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return datetime.now(UTC)
+
+
 class HashEmbedder(EmbedderClient):
     """Small local n-gram embedder used until a dedicated embedding model is configured."""
 
@@ -171,7 +180,7 @@ class GraphitiMemoryProvider:
             client = await self._get_client()
             if client is not None:
                 task = asyncio.create_task(
-                    self._write_episode(
+                    self._background_write(
                         client,
                         contact,
                         user_text,
@@ -188,7 +197,80 @@ class GraphitiMemoryProvider:
             )
         return legacy_row
 
+    async def persist_candidate(self, candidate: dict[str, Any]) -> None:
+        """Persist one durable queue candidate synchronously.
+
+        This is called by the standalone ingestion worker. The legacy store is
+        written first so fallback recall remains useful even if Graphiti is down.
+        """
+
+        contact = str(candidate["contact_id"])
+        event_id = str(candidate["event_id"])
+        await self.legacy.remember(
+            contact,
+            str(candidate["user_text"]),
+            str(candidate["assistant_text"]),
+            event_id=event_id,
+            source=str(candidate["source"]),
+        )
+        client = await self._get_client()
+        if client is None:
+            raise RuntimeError("graphiti is disabled")
+        await self._write_episode(
+            client,
+            contact,
+            str(candidate["user_text"]),
+            str(candidate["assistant_text"]),
+            event_id=event_id,
+            source=str(candidate["source"]),
+            reference_time=_as_utc(candidate.get("reference_time")),
+            group_id=str(candidate.get("group_id") or ("contact_" + contact_key(contact))),
+        )
+
     async def _write_episode(
+        self,
+        client,
+        contact: str,
+        user_text: str,
+        assistant_text: str,
+        *,
+        event_id: str,
+        source: str,
+        reference_time: datetime | None = None,
+        group_id: str | None = None,
+    ) -> None:
+        target_group = group_id or ("contact_" + contact_key(contact))
+        episode_name = f"conversation:{event_id}"[:80]
+        if await self._episode_exists(client, episode_name, target_group):
+            return
+        await client.add_episode(
+            name=episode_name,
+            episode_body=f"\u8001\u5927\uff1a{user_text}\n\u5c0f\u5c45\u5c45\uff1a{assistant_text}",
+            source=EpisodeType.message,
+            source_description=source,
+            reference_time=reference_time or datetime.now(UTC),
+            group_id=target_group,
+        )
+
+    async def _episode_exists(self, client, name: str, group_id: str) -> bool:
+        """Check the business key before retrying a partially acknowledged write."""
+
+        driver = getattr(client, "driver", None)
+        if driver is None:
+            return False
+        result = await driver.execute_query(
+            """
+            MATCH (e:Episodic {name: $name, group_id: $group_id})
+            RETURN e.uuid
+            LIMIT 1
+            """,
+            params={"name": name, "group_id": group_id},
+            routing_="r",
+        )
+        records = getattr(result, "records", None)
+        return bool(records)
+
+    async def _background_write(
         self,
         client,
         contact: str,
@@ -199,15 +281,15 @@ class GraphitiMemoryProvider:
         source: str,
     ) -> None:
         try:
-            await client.add_episode(
-                name=f"conversation:{event_id}"[:80],
-                episode_body=f"\u8001\u5927\uff1a{user_text}\n\u5c0f\u5c45\u5c45\uff1a{assistant_text}",
-                source=EpisodeType.message,
-                source_description=source,
-                reference_time=datetime.now(UTC),
-                group_id="contact_" + contact_key(contact),
+            await self._write_episode(
+                client,
+                contact,
+                user_text,
+                assistant_text,
+                event_id=event_id,
+                source=source,
             )
-        except Exception as exc:  # noqa: BLE001 - graph failure must fall back to legacy memory
+        except Exception as exc:  # noqa: BLE001 - legacy memory remains available
             logger.warning("graphiti remember failed; legacy memory remains: %s", exc)
 
     async def drain(self) -> None:

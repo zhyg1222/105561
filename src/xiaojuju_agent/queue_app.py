@@ -8,6 +8,8 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 
 from .db import Database
 from .events import EventProcessing, EventStore
+from .graphiti_memory import GraphitiMemoryProvider
+from .memory import LegacyMemoryProvider
 from .observability import configure_observability
 from .runtime import AgentRuntime
 from .settings import Settings
@@ -28,7 +30,17 @@ CeleryInstrumentor().instrument()
 
 
 async def _run(event_id: str):
-    runtime = AgentRuntime(settings)
+    if settings.graphiti_enabled:
+        memory_provider = GraphitiMemoryProvider(settings)
+        durable_memory_enabled = True
+    else:
+        memory_provider = LegacyMemoryProvider()
+        durable_memory_enabled = False
+    runtime = AgentRuntime(
+        settings,
+        memory_provider=memory_provider,
+        durable_memory_enabled=durable_memory_enabled,
+    )
     await runtime.start()
     try:
         return await runtime.process_event(event_id)

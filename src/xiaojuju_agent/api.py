@@ -99,6 +99,7 @@ def create_app(
     force_shadow: bool = True,
     tool_executor=None,
     approval_store=None,
+    memory_queue=None,
 ) -> FastAPI:
     app = FastAPI()
     app.state.event_service = event_service
@@ -106,6 +107,7 @@ def create_app(
     app.state.policy_client = policy_client
     app.state.tool_executor = tool_executor
     app.state.approval_store = approval_store
+    app.state.memory_queue = memory_queue
 
     @app.get("/healthz")
     async def healthz():
@@ -139,6 +141,16 @@ def create_app(
             },
             status_code=code,
         )
+
+    @app.get("/v1/memory/queue")
+    async def memory_queue_stats(request: Request):
+        queue = getattr(request.app.state, "memory_queue", None)
+        if queue is None:
+            raise HTTPException(status_code=503, detail="memory queue unavailable")
+        try:
+            return await queue.stats()
+        except PsycopgError as exc:
+            raise HTTPException(status_code=503, detail="memory queue unavailable") from exc
 
     @app.post("/v1/events")
     async def submit_event(request: Request):
