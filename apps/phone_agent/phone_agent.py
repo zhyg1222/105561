@@ -486,7 +486,7 @@ def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
             return False
         check = RUNTIME / 'composer.png'
         check_img = shot()
-        crop(check_img, (0, int(h*0.82), w, int(h*0.97)), check)
+        crop(check_img, (0, int(h*0.68), w, int(h*0.80)), check)
         result, _ = ocr_image(check)
         visible = ''.join(str(t) for _, t, s in result if s >= 0.5)
         norm = lambda x: re.sub(r'[^\u4e00-\u9fff0-9A-Za-z]', '', x)
@@ -499,7 +499,7 @@ def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
         for box, label, score in result:
             if '\u53d1\u9001' in str(label) and score >= 0.5:
                 xs=[q[0] for q in box]; ys=[q[1] for q in box]
-                send=(int((min(xs)+max(xs))/2), int((min(ys)+max(ys))/2)+int(h*0.82))
+                send=(int((min(xs)+max(xs))/2), int((min(ys)+max(ys))/2)+int(h*0.68))
                 break
         if send is None:
             log('send button not found')
