@@ -13,6 +13,7 @@ def main():
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     paths = Paths.production()
     if args.pause:
@@ -26,10 +27,10 @@ def main():
         print("paused" if paths.paused.exists() else "running")
         return
     if args.once:
-        print(json.dumps(tick(paths, datetime.now(), dry_run=args.dry_run), ensure_ascii=False))
+        print(json.dumps(tick(paths, datetime.now(), dry_run=args.dry_run, force=args.force), ensure_ascii=False))
         return
     while True:
-        print(json.dumps(tick(paths, datetime.now(), dry_run=args.dry_run), ensure_ascii=False), flush=True)
+        print(json.dumps(tick(paths, datetime.now(), dry_run=args.dry_run, force=args.force), ensure_ascii=False), flush=True)
         time.sleep(900)
 
 if __name__ == "__main__":

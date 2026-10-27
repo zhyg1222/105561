@@ -13,7 +13,7 @@ class IntegrationTests(unittest.TestCase):
             p.daily_plans.mkdir(parents=True)
             add_goal("自主研究", "self", 99, goals_path=p.goals)
             boss=add_goal("老大任务", "boss", 1, goals_path=p.goals)
-            out=tick(p, datetime(2026,10,26,10,0), lambda prompt: {"title":"完成","markdown":"成功"})
+            out=tick(p, datetime(2026,10,26,10,0), lambda prompt: {"title":"完成老大任务","markdown":"成功"})
             self.assertEqual(out["status"],"done")
             data=json.loads(p.goals.read_text(encoding="utf-8"))
             self.assertEqual([g["status"] for g in data["goals"] if g["id"]==boss["id"]], ["done"])

@@ -132,3 +132,11 @@
 - WSL 现在必须先启动保活；`XiaoJuJu-Agent-Stack` 会启动 WSL/Docker 并保持 `sleep infinity`，否则 Docker 容器会反复重建、端口丢失。
 - 当前最新测试：`138 passed`；OPA 4/4。
 - 仍未实现：社交媒体平台的自动发布、直播自主运营、Graphiti/Neo4j 长期图谱、Celery Beat 自主生活完整接线。
+## 自主生活恢复
+
+- 自主活动 prompt 已强制特定目标围绕目标关键词，不再随意改做章鱼/猫等无关主题。
+- 空输出和偏离目标会重试；连续偏离返回 `off_goal`，不写假成果。
+- 失败缓存不会永久锁住目标：`daemon.tick` 会创建 `autonomy:<id>:retry:<epoch>`。
+- 新增 `run_autonomy.py --force` 作为人工恢复开关。
+- 真实验收：微信/抖音收入目标从 failed 恢复为 done；视力防控门店合规获客目标完成并生成 Markdown 成果。
+- 最新自主活动日志已写入 `自主生活\活动日志\2026-10-27.jsonl`。

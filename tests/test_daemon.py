@@ -29,7 +29,7 @@ class DaemonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = make_paths(Path(d)); p.daily_plans.mkdir(parents=True)
             add_goal("研究直播", "self", 10, goals_path=p.goals)
-            runner = lambda prompt: {"title":"研究","markdown":"# ok"}
+            runner = lambda prompt: {"title":"研究直播","markdown":"# ok"}
             first = tick(p, datetime(2026,10,26,10,0), runner)
             add_goal("第二个目标", "self", 9, goals_path=p.goals)
             second = tick(p, datetime(2026,10,26,10,15), runner)
@@ -48,8 +48,8 @@ class DaemonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = make_paths(Path(d)); p.daily_plans.mkdir(parents=True)
             queue = p.persona / "自主生活" / "兴趣" / "关注队列.json"
-            item = add_interest("虚拟主播如何自然接弹幕", "想改善直播互动", interests_path=queue)
-            out = tick(p, datetime(2026,10,26,10,0), lambda prompt: {"title":"研究结果","markdown":"完成"})
+            add_interest("虚拟主播如何自然接弹幕", "想改善直播互动", interests_path=queue)
+            out = tick(p, datetime(2026,10,26,10,0), lambda prompt: {"title":"虚拟主播接弹幕研究结果","markdown":"完成"})
             self.assertEqual(out["status"], "done")
             data = json.loads(p.goals.read_text(encoding="utf-8"))
             self.assertIn("虚拟主播如何自然接弹幕", data["goals"][0]["title"])
