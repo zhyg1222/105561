@@ -2,11 +2,13 @@ import unittest
 
 from xiaojuju_core.phone_ui import (
     append_history_message,
+    composer_has_content,
     extract_current_ime,
     find_ocr_point,
     join_ocr_text,
     join_pending_messages,
     ocr_contains,
+    outgoing_send_confirmed,
     pending_left_after_last_right,
 )
 
@@ -27,6 +29,16 @@ class PhoneUiTests(unittest.TestCase):
     def test_ocr_tolerates_one_dropped_repeated_character(self):
         result = [([[0, 0], [10, 0], [10, 10], [0, 10]], "xj-test发送", 0.88)]
         self.assertTrue(ocr_contains(result, "xjj-test"))
+
+    def test_composer_accepts_ocr_poor_text_with_send_affordance(self):
+        self.assertTrue(composer_has_content(False, True, True))
+        self.assertFalse(composer_has_content(False, True, False))
+        self.assertTrue(composer_has_content(True, False, False))
+
+    def test_outgoing_send_requires_composer_clear_and_focus(self):
+        self.assertTrue(outgoing_send_confirmed(False, True))
+        self.assertFalse(outgoing_send_confirmed(True, True))
+        self.assertFalse(outgoing_send_confirmed(False, False))
 
     def test_current_ime_is_read_from_dumpsys(self):
         output = "mCurMethodId=com.android.adbkeyboard/.AdbIME\nmInputShown=true"

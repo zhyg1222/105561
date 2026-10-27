@@ -12,10 +12,12 @@ from xiaojuju_core.outbox import pending_messages, mark_message
 from xiaojuju_core.adb_control import select_serial
 from xiaojuju_core.phone_ui import (
     append_history_message,
+    composer_has_content,
     extract_current_ime,
     find_ocr_point,
     join_ocr_text,
     ocr_contains,
+    outgoing_send_confirmed,
     pending_left_after_last_right,
 )
 import numpy as np
@@ -607,11 +609,14 @@ def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
             return False
         check_img = shot()
         result, _ = ocr_image(check_img)
-        if not ocr_contains(result, text):
+        # OCR often cannot read Chinese inside the Android IME composer. The
+        # visible send button plus an open keyboard is the stronger signal that
+        # ADBKeyboard accepted the text; exact OCR remains a fast positive path.
+        send = find_ocr_point(result, '\u53d1\u9001', min_y=h * 0.75, max_y=h * 0.97)
+        if not composer_has_content(ocr_contains(result, text), send is not None, keyboard_shown()):
             log('composer verification failed: ' + join_ocr_text(result)[:120])
             run_adb('shell', 'am', 'broadcast', '-a', 'ADB_CLEAR_TEXT')
             return False
-        send = find_ocr_point(result, '\u53d1\u9001', min_y=h * 0.45, max_y=h * 0.97)
         if send is None:
             log('send button not found')
             run_adb('shell', 'am', 'broadcast', '-a', 'ADB_CLEAR_TEXT')
@@ -620,15 +625,19 @@ def send_text(text, expected_incoming=None, contact=PERSONA_CHAT_TITLE):
         time.sleep(2)
         after = shot()
         after_result, _ = ocr_image(after)
-        if find_ocr_point(after_result, '\u53d1\u9001', min_y=h * 0.45, max_y=h * 0.97):
+        send_still_visible = find_ocr_point(
+            after_result, '\u53d1\u9001', min_y=h * 0.75, max_y=h * 0.97
+        ) is not None
+        if not outgoing_send_confirmed(send_still_visible, focus_is_xiaojuju()):
             log('send did not clear the composer')
             return False
         dismiss_keyboard()
         after = shot()
         after_result, _ = ocr_image(after)
         if not ocr_contains(after_result, text):
-            log('message sent but outgoing bubble verification failed')
-            return False
+            # Chinese OCR can drop characters in bubbles. The composer-clear
+            # check above is still a real platform action receipt.
+            log('outgoing bubble OCR partial; composer cleared, accepting send')
         return focus_is_xiaojuju()
     finally:
         restore_ime(original_ime)

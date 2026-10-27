@@ -103,4 +103,11 @@ phone_agent 优先消费 `app_outbox`，没有消息时回退旧的 `待发送.j
 - 手机 worker 成功发送并回写 `sent`
 - 日志：`[大哥] sent app outbox message bridge-ascii-20261027`
 
-中文短消息可能因 OCR 对输入框文本检查过严而进入重试；这不是消息桥本身失败。后续应把输入框验证从“完整 OCR 相等”改为键盘/UI 状态与发送后气泡的联合校验。
+中文消息已通过真机验收：使用 ADBKeyboard 输入 `微信桥OK`，Composer 显示正常，发送按钮可见，消息气泡正常出现，`send_text` 返回 True。输入框校验现在优先使用“发送按钮出现 + 键盘已打开”作为 OCR 失败时的正向信号；发送后仍要求发送按钮消失并保持微信焦点。
+### 中文 App Outbox 真机验收（2026-10-27）
+
+- 入队 `bridge-cn-outbox-20261027`
+- 文本：`微信桥OutboxOK`
+- 手机 worker 成功领取、真实发送并回写 `sent`
+- 日志：`[大哥] sent app outbox message bridge-cn-outbox-20261027`
+- 截图：`D:\yige-personal-kb\.runtime\phone-agent\screen.png`

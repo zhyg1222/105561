@@ -67,6 +67,20 @@ def find_ocr_point(
     return None
 
 
+def composer_has_content(
+    ocr_match: bool,
+    send_visible: bool,
+    keyboard_open: bool,
+) -> bool:
+    """Accept OCR-poor Chinese input only with a visible send affordance."""
+
+    return bool(ocr_match or (send_visible and keyboard_open))
+
+
+def outgoing_send_confirmed(send_still_visible: bool, focus_ok: bool) -> bool:
+    return not send_still_visible and bool(focus_ok)
+
+
 def extract_current_ime(dumpsys_output: str) -> str:
     match = re.search(r"\bmCurMethodId=([^\s]+)", str(dumpsys_output or ""))
     return match.group(1) if match else ""
