@@ -13,6 +13,7 @@ class Scenario:
     id: str
     category: str
     prompt: str
+    turns: tuple[str, ...] = field(default_factory=tuple)
     max_chars: int = 160
     forbidden: tuple[str, ...] = field(default_factory=tuple)
     required_any: tuple[str, ...] = field(default_factory=tuple)
@@ -25,11 +26,16 @@ def load_scenarios(path: Path | str) -> list[Scenario]:
         if not line:
             continue
         data = json.loads(line)
+        turns = tuple(str(item) for item in data.get("turns", []) if str(item).strip())
+        prompt = str(data.get("prompt") or (turns[0] if turns else "")).strip()
+        if not prompt:
+            raise ValueError(f"scenario {data.get('id', '?')} has no prompt or turns")
         rows.append(
             Scenario(
                 id=str(data["id"]),
                 category=str(data["category"]),
-                prompt=str(data["prompt"]),
+                prompt=prompt,
+                turns=turns,
                 max_chars=int(data.get("max_chars", 160)),
                 forbidden=tuple(data.get("forbidden", [])),
                 required_any=tuple(data.get("required_any", [])),

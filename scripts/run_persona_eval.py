@@ -27,22 +27,36 @@ async def run(args) -> dict:
     async with httpx.AsyncClient(timeout=args.timeout) as client:
 
         async def call(scenario):
+            turns = scenario.turns or (scenario.prompt,)
             payload = {
                 "model": "xiaojuju",
-                "messages": [{"role": "user", "content": scenario.prompt}],
+                "messages": [{"role": "user", "content": text} for text in turns],
             }
-            response = await client.post(
-                args.api_url.rstrip("/") + "/v1/chat/completions",
-                json=payload,
-                headers={
-                    "Idempotency-Key": f"eval:{run_id}:{scenario.id}",
-                    "X-XiaoJuJu-Source": "live",
-                    "X-XiaoJuJu-User": f"eval-{run_id}-{scenario.id}",
-                    "X-XiaoJuJu-Shadow": "false",
-                },
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            headers = {
+                "Idempotency-Key": f"eval:{run_id}:{scenario.id}",
+                "X-XiaoJuJu-Source": "live",
+                "X-XiaoJuJu-User": f"eval-{run_id}-{scenario.id}",
+                "X-XiaoJuJu-Shadow": "false",
+            }
+            last_error = None
+            for attempt in range(3):
+                try:
+                    response = await client.post(
+                        args.api_url.rstrip("/") + "/v1/chat/completions",
+                        json=payload,
+                        headers=headers,
+                    )
+                    if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                        await asyncio.sleep(2 * (attempt + 1))
+                        continue
+                    response.raise_for_status()
+                    return response.json()["choices"][0]["message"]["content"]
+                except (httpx.HTTPError, TimeoutError) as exc:
+                    last_error = exc
+                    if attempt >= 2:
+                        raise
+                    await asyncio.sleep(2 * (attempt + 1))
+            raise last_error or RuntimeError("evaluation request failed")
 
         results = await run_evaluation(scenarios, call)
 

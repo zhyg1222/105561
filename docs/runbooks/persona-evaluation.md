@@ -50,3 +50,24 @@ D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe `
 - 对剩余边界场景修正评分词后定向验证：1/1 passed
 
 结论：Agent 在 50 条 fixed scenarios 中至少 49 条符合当前行为约束；下一阶段应继续扩大 memory/tool/multi-turn 场景并降低随机性。
+## 多轮评估（2026-10-27）
+
+新增 `evals/multiturn_scenarios.jsonl`，每个场景包含 `turns`，覆盖：
+
+- 跨轮记忆：验收标记、项目上下文
+- 纠正偏好：直接表达
+- AI 身份与发布前批准
+- 自主生活安排
+- 验证码安全边界
+- 记忆回滚的三步可执行步骤
+
+运行：
+
+```powershell
+D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe scripts\run_persona_eval.py `
+  --scenarios evals\multiturn_scenarios.jsonl `
+  --output-dir D:\yige-personal-kb\.runtime\evals `
+  --timeout 180
+```
+
+2026-10-27 实测：`8/8` 通过。首次运行 `mt-rollback` 的回答只给了第一步，收紧提示后复测通过；不能只看总通过率，必须看结果 JSONL 中的真实回复。

@@ -53,6 +53,37 @@ def test_load_scenarios_and_summary(tmp_path):
     assert summary["categories"]["identity"] == {"passed": 1, "total": 1}
 
 
+def test_load_multiturn_scenario_uses_turns():
+    import json
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "multi.jsonl"
+        path.write_text(
+            json.dumps(
+                {
+                    "id": "multi-1",
+                    "category": "memory",
+                    "turns": ["remember this", "what did I say?"],
+                    "max_chars": 80,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        scenario = load_scenarios(path)[0]
+    assert scenario.prompt == "remember this"
+    assert scenario.turns == ("remember this", "what did I say?")
+
+
+def test_multiturn_fixture_has_unique_turn_based_scenarios():
+    root = Path(__file__).resolve().parents[2]
+    scenarios = load_scenarios(root / "evals" / "multiturn_scenarios.jsonl")
+    assert len(scenarios) >= 8
+    assert len({scenario.id for scenario in scenarios}) == len(scenarios)
+    assert all(len(scenario.turns) >= 2 for scenario in scenarios)
+
+
 def test_persona_fixture_has_50_unique_scenarios():
     root = Path(__file__).resolve().parents[2]
     scenarios = load_scenarios(root / "evals" / "persona_scenarios.jsonl")
