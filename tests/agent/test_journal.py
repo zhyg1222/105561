@@ -13,6 +13,7 @@ def test_journal_filters_test_and_empty_events():
     assert should_include_message("real-message") is True
     assert should_include_message("health:20261028") is False
     assert meaningful_text("???") is False
+    assert meaningful_text("Introduce yourself as an AI agent") is False
     assert meaningful_text("真实对话") is True
 
 

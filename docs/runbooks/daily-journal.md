@@ -39,7 +39,7 @@ D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe scripts\generate_daily_jou
 
 2026-10-27 日录已生成：
 
-- 真实对话：6 条
+- 真实对话：3 条
 - 自主活动：3 完成、1 失败
 - Memory 队列：239 `done`
 - 健康检查：正常

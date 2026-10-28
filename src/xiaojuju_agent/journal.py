@@ -22,6 +22,14 @@ EXCLUDED_PREFIXES = (
 )
 
 EXCLUDED_MESSAGE_PREFIXES = ("bridge-", "health:")
+TEST_TEXT_MARKERS = (
+    "persistent memory queue",
+    "memory queue acceptance",
+    "introduce yourself",
+    "say hi in one short sentence",
+    "微信桥",
+    "跨进程测试",
+)
 
 
 def should_include_event(event_id: str) -> bool:
@@ -34,8 +42,10 @@ def should_include_message(message_id: str) -> bool:
 
 
 def meaningful_text(value: Any) -> bool:
-    text = str(value or "").strip()
-    return bool(text) and any(char not in "?？!！.。,， " for char in text)
+    text = str(value or "").strip().lower()
+    if not text or not any(char not in "?？!！.。,， " for char in text):
+        return False
+    return not any(marker.lower() in text for marker in TEST_TEXT_MARKERS)
 
 
 def _clip(value: Any, limit: int = 800) -> str:
