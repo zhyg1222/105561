@@ -31,6 +31,11 @@ class IdentityBundle:
             if not content:
                 raise RuntimeError(f"required identity file is empty: {relative}")
             chunks.append(f"# {relative}\n{content}")
+        optional_profile = base / "\u8eab\u4efd" / "\u7528\u6237\u753b\u50cf.md"
+        if optional_profile.is_file():
+            profile = optional_profile.read_text(encoding="utf-8").strip()
+            if profile:
+                chunks.append(f"# \u7528\u6237\u753b\u50cf\uff08\u8001\u5927\u81ea\u8ff0\uff0c\u672a\u72ec\u7acb\u9a8c\u8bc1\uff09\n{profile}")
         text = "\n\n".join(chunks)
         digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
         return cls(content=text, sha256=digest)

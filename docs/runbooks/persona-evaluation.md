@@ -71,3 +71,26 @@ D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe scripts\run_persona_eval.p
 ```
 
 2026-10-27 实测：`8/8` 通过。首次运行 `mt-rollback` 的回答只给了第一步，收紧提示后复测通过；不能只看总通过率，必须看结果 JSONL 中的真实回复。
+## 对话无聊修复（2026-10-28）
+
+问题来自三层叠加，不是单纯模型不行：
+
+1. `live_persona` 和关系规则把回复硬限制在 1～3 句、15～60 字，复杂问题也被压平。
+2. `clean_chat_reply` 只保留前两句话，最多 160 字，模型即使想展开也被截断。
+3. 主 Agent 身份包只注入人格，不注入用户画像，导致它知道“怎么说话”，但不知道“对谁、为什么说”。
+
+已做：
+
+- 回复清洗改为最多 6 句/800 字，默认保留完整语义；短聊仍由风格规则控制。
+- 身份包可选加载 `身份/用户画像.md`，标注为“老大自述、未独立验证”。
+- 增加对话表现升级规则：先判断闲聊/求判断/求方案/事实核查；闲聊具体有反差，方案先结论再理由和验收标准，不为短牺牲信息。
+- 新增 `mt-priority-action`、`mt-fatigue-support` 两个场景，分别验证“直接给下一步”和“累了不要硬安排任务”。
+- 两项实测通过；追问“今天先做什么”时给出了唯一动作、理由和验收标准，而不是鸡汤。
+
+运行：
+
+```powershell
+D:\yige-personal-kb\xiaojuju\.venv\Scripts\python.exe scripts\run_persona_eval.py `
+  --scenarios evals\multiturn_scenarios.jsonl `
+  --output-dir D:\yige-personal-kb\.runtime\evals
+```

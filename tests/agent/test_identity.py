@@ -64,6 +64,14 @@ async def test_identity_is_not_duplicated_into_checkpointed_history(tmp_path):
     assert [message for message in result["messages"] if message.type == "system"] == []
 
 
+def test_optional_user_profile_is_injected(tmp_path):
+    write_identity(tmp_path)
+    (tmp_path / IDENTITY_DIR / "\u7528\u6237\u753b\u50cf.md").write_text("user profile fact", encoding="utf-8")
+    bundle = IdentityBundle.load(tmp_path)
+    assert "user profile fact" in bundle.content
+    assert "\u672a\u72ec\u7acb\u9a8c\u8bc1" in bundle.content
+
+
 def test_identity_bundle_fails_when_required_file_is_missing(tmp_path):
     write_identity(tmp_path)
     (tmp_path / RELATIONSHIP).unlink()
