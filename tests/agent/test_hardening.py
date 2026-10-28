@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -86,7 +87,7 @@ def test_worker_creates_process_span(monkeypatch, span_exporter):
 
 def test_agent_env_is_ignored():
     result = subprocess.run(
-        ["git", "check-ignore", "-q", "--no-index", "deploy/agent.env"],
+        [shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe", "check-ignore", "-q", "--no-index", "deploy/agent.env"],
         capture_output=True,
         text=True,
         check=False,

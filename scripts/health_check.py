@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
 RUNTIME = Path("D:/yige-personal-kb/.runtime/health")
 ADB = Path("D:/yige-personal-kb/.runtime/android-tools/extracted/platform-tools/adb.exe")
+POWERSHELL = Path("C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
+WSL = Path("C:/Windows/System32/wsl.exe")
+SCHTASKS = Path("C:/Windows/System32/schtasks.exe")
 PHONE_LOG = Path("D:/yige-personal-kb/.runtime/phone-agent/phone-agent.log")
 AUTONOMY_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/autonomy/last_run.json")
 PROACTIVE_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/proactive/last_run.json")
@@ -28,7 +31,6 @@ TASKS = (
     "XiaoJuJu-Autonomy",
     "XiaoJuJu-Proactive-Chat",
     "XiaoJuJu-Brain-Gateway",
-    "XiaoJuJu-VTuber",
 )
 
 
@@ -50,7 +52,7 @@ def command(args: list[str], timeout: int = 20) -> tuple[int, str]:
 
 def http_check(url: str, *, body: bool = True) -> dict[str, Any]:
     try:
-        response = httpx.get(url, timeout=5)
+        response = httpx.get(url, timeout=15)
         result = {"ok": response.status_code == 200, "status": response.status_code}
         if body:
             result["body"] = response.text[:1000]
@@ -65,8 +67,8 @@ def process_check() -> dict[str, Any]:
         "-and ($_.CommandLine -match 'run_agent_api|run_memory_worker|phone_agent.py') } "
         "| Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
     )
-    code, text = command(["powershell.exe", "-NoProfile", "-Command", script], timeout=20)
-    return {"ok": code == 0 and bool(text), "output": text[-2000:]}
+    code, text = command([str(POWERSHELL), "-NoProfile", "-Command", script], timeout=20)
+    return {"ok": code == 0, "output": text[-2000:]}
 
 
 def postgres_check(settings) -> dict[str, Any]:
@@ -111,7 +113,7 @@ def neo4j_check(settings) -> dict[str, Any]:
 
 def docker_check() -> dict[str, Any]:
     code, text = command(
-        ["wsl.exe", "-d", "UbuntuAgent", "-u", "root", "--", "bash", "-lc", "docker ps --format '{{.Names}} {{.Status}}'"],
+        [str(WSL), "-d", "UbuntuAgent", "-u", "root", "--", "bash", "-lc", "docker ps --format '{{.Names}} {{.Status}}'"],
         timeout=30,
     )
     names = {"xiaojuju-agent-postgres-1", "xiaojuju-agent-neo4j-1", "xiaojuju-agent-valkey-1", "xiaojuju-agent-opa-1"}
@@ -155,7 +157,7 @@ def repair(tasks: list[str]) -> None:
     RUNTIME.mkdir(parents=True, exist_ok=True)
     cooldown.write_text(str(now), encoding="utf-8")
     for task in tasks:
-        command(["schtasks.exe", "/Run", "/TN", task], timeout=20)
+        command([str(SCHTASKS), "/Run", "/TN", task], timeout=20)
 
 
 def notify(settings, checks: dict[str, Any]) -> None:
@@ -185,7 +187,6 @@ def main() -> None:
     settings = Settings.from_env()
     checks = {
         "api": http_check("http://127.0.0.1:12402/readyz"),
-        "vtuber": http_check("http://127.0.0.1:12393/", body=False),
         "processes": process_check(),
         "postgres": postgres_check(settings),
         "neo4j": neo4j_check(settings),

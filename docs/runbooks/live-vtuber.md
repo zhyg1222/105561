@@ -45,3 +45,11 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*run_server
 - `D:\yige-personal-kb\.runtime\vtuber\server.err.log`
 
 这样 vendor 配置被升级脚本覆盖时也不会静默接回旧 Gateway。
+## 资源策略（2026-10-28）
+
+当前主机只有约 8 GB 内存，VTuber 只作为按需本地表现层，不默认常驻：
+
+- 登录启动任务 `XiaoJuJu-VTuber` 已禁用
+- 需要时手动运行 `wscript.exe scripts\start_vtuber.vbs`
+- 不再把 VTuber 在线作为核心 Agent 健康检查的硬条件
+- 核心 API、微信、记忆和自主生活保持常驻

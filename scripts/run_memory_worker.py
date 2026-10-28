@@ -12,6 +12,26 @@ from xiaojuju_agent.memory_queue import MemoryIngestionWorker, MemoryQueueStore
 from xiaojuju_agent.settings import Settings
 
 logger = logging.getLogger(__name__)
+def _acquire_lock():
+    if sys.platform != "win32":
+        return object()
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.CreateMutexW(None, False, r"Local\XiaoJuJuMemoryWorker")
+    if not handle:
+        return None
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        kernel32.CloseHandle(handle)
+        return None
+    return handle
+
+
+def _release_lock(handle) -> None:
+    if sys.platform == "win32" and handle is not None:
+        import ctypes
+
+        ctypes.windll.kernel32.CloseHandle(handle)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -56,7 +76,14 @@ def main() -> None:
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     logging.basicConfig(level=logging.INFO)
     args = _parse_args()
-    raise SystemExit(asyncio.run(_run(args)))
+    lock = _acquire_lock()
+    if lock is None:
+        print("memory worker already running")
+        return
+    try:
+        raise SystemExit(asyncio.run(_run(args)))
+    finally:
+        _release_lock(lock)
 
 
 if __name__ == "__main__":
