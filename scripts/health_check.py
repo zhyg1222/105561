@@ -23,6 +23,7 @@ SCHTASKS = Path("C:/Windows/System32/schtasks.exe")
 PHONE_LOG = Path("D:/yige-personal-kb/.runtime/phone-agent/phone-agent.log")
 AUTONOMY_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/autonomy/last_run.json")
 PROACTIVE_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/proactive/last_run.json")
+DAILY_JOURNAL_HEARTBEAT = Path("D:/yige-personal-kb/.runtime/daily-journal/last_run.json")
 TASKS = (
     "XiaoJuJu-Agent-Stack",
     "XiaoJuJu-Agent-API",
@@ -30,6 +31,7 @@ TASKS = (
     "XiaoJuJu-Phone-Agent",
     "XiaoJuJu-Autonomy",
     "XiaoJuJu-Proactive-Chat",
+    "XiaoJuJu-Daily-Journal",
     "XiaoJuJu-Brain-Gateway",
 )
 
@@ -51,14 +53,19 @@ def command(args: list[str], timeout: int = 20) -> tuple[int, str]:
 
 
 def http_check(url: str, *, body: bool = True) -> dict[str, Any]:
-    try:
-        response = httpx.get(url, timeout=15)
-        result = {"ok": response.status_code == 200, "status": response.status_code}
-        if body:
-            result["body"] = response.text[:1000]
-        return result
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": repr(exc)}
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = httpx.get(url, timeout=15)
+            result = {"ok": response.status_code == 200, "status": response.status_code}
+            if body:
+                result["body"] = response.text[:1000]
+            return result
+        except Exception as exc:  # noqa: BLE001 - health checks retry transient startup
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2)
+    return {"ok": False, "error": repr(last_error)}
 
 
 def process_check() -> dict[str, Any]:
@@ -194,6 +201,7 @@ def main() -> None:
         "phone": phone_check(),
         "autonomy": heartbeat_check(AUTONOMY_HEARTBEAT, 1800),
         "proactive": heartbeat_check(PROACTIVE_HEARTBEAT, 7200),
+        "daily_journal": heartbeat_check(DAILY_JOURNAL_HEARTBEAT, 129600),
     }
     report = {
         "generated_at": datetime.now(UTC).isoformat(),

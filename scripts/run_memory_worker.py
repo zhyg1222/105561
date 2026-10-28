@@ -10,28 +10,17 @@ from xiaojuju_agent.graphiti_memory import GraphitiMemoryProvider
 from xiaojuju_agent.memory import LegacyMemoryProvider
 from xiaojuju_agent.memory_queue import MemoryIngestionWorker, MemoryQueueStore
 from xiaojuju_agent.settings import Settings
+from xiaojuju_core.windows_mutex import acquire_named_mutex, release_named_mutex
 
 logger = logging.getLogger(__name__)
-def _acquire_lock():
-    if sys.platform != "win32":
-        return object()
-    import ctypes
 
-    kernel32 = ctypes.windll.kernel32
-    handle = kernel32.CreateMutexW(None, False, r"Local\XiaoJuJuMemoryWorker")
-    if not handle:
-        return None
-    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-        kernel32.CloseHandle(handle)
-        return None
-    return handle
+
+def _acquire_lock():
+    return acquire_named_mutex(r"Local\XiaoJuJuMemoryWorker")
 
 
 def _release_lock(handle) -> None:
-    if sys.platform == "win32" and handle is not None:
-        import ctypes
-
-        ctypes.windll.kernel32.CloseHandle(handle)
+    release_named_mutex(handle)
 
 
 def _parse_args() -> argparse.Namespace:

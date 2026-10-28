@@ -15,6 +15,8 @@ def main() -> None:
 
     from uvicorn import Config, Server
 
+    from xiaojuju_core.windows_mutex import acquire_named_mutex, release_named_mutex
+
     class SelectorConfig(Config):
         def get_loop_factory(self):
             return asyncio.SelectorEventLoop
@@ -25,7 +27,14 @@ def main() -> None:
         port=args.port,
         log_level=args.log_level,
     )
-    Server(config).run()
+    lock = acquire_named_mutex(r"Local\XiaoJuJuAgentAPI")
+    if lock is None:
+        print("agent API already running")
+        return
+    try:
+        Server(config).run()
+    finally:
+        release_named_mutex(lock)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, base64, hashlib, json, msvcrt, os, re, shutil, subprocess, sys, time, uuid
+import argparse, base64, hashlib, json, os, re, shutil, subprocess, sys, time, uuid
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from pathlib import Path
@@ -10,6 +10,7 @@ from xiaojuju_core.contacts import load_wechat_contacts, contact_key
 from xiaojuju_core.config import load_config
 from xiaojuju_core.outbox import pending_messages, mark_message
 from xiaojuju_core.adb_control import select_serial
+from xiaojuju_core.windows_mutex import acquire_named_mutex
 from xiaojuju_core.phone_ui import (
     append_history_message,
     composer_has_content,
@@ -810,18 +811,7 @@ def run_once(prime=False):
 
 def acquire_instance_lock():
     RUNTIME.mkdir(parents=True, exist_ok=True)
-    lock = (RUNTIME / 'worker.lock').open('a+b')
-    lock.seek(0, os.SEEK_END)
-    if lock.tell() == 0:
-        lock.write(b'0')
-        lock.flush()
-    lock.seek(0)
-    try:
-        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-    except OSError:
-        lock.close()
-        return None
-    return lock
+    return acquire_named_mutex(r"Local\XiaoJuJuPhoneAgent")
 
 
 def main():
